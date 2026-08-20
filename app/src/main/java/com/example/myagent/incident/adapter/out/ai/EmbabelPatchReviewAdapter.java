@@ -26,12 +26,12 @@ public class EmbabelPatchReviewAdapter implements PatchReviewPort {
         return Try.of(() -> {
             var invocation = AgentInvocation.create(
                 agentPlatform,
-                HotfixImplementationAgents.PatchReviewResult.class
+                PatchReviewResult.class
             );
-            var result = invocation.run(new HotfixImplementationAgents.PatchReviewInput(
+            var result = invocation.run(new PatchReviewInput(
                 candidate,
                 patch
-            )).resultOfType(HotfixImplementationAgents.PatchReviewResult.class);
+            )).resultOfType(PatchReviewResult.class);
             return new Review(result.approved(), result.summary(), result.findings());
         }).toEither().mapLeft(exception -> new IncidentFailure(
             "PATCH_REVIEW_FAILED",

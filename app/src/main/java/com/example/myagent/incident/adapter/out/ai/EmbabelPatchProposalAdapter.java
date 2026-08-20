@@ -24,14 +24,14 @@ public class EmbabelPatchProposalAdapter implements PatchProposalPort {
         return Try.of(() -> {
             var invocation = AgentInvocation.create(
                 agentPlatform,
-                HotfixImplementationAgents.PatchProposalResult.class
+                PatchProposalResult.class
             );
-            var result = invocation.run(new HotfixImplementationAgents.PatchAuthorInput(
+            var result = invocation.run(new PatchAuthorInput(
                 request.candidate(),
                 request.workspace(),
                 request.attempt(),
                 request.previousFailure()
-            )).resultOfType(HotfixImplementationAgents.PatchProposalResult.class);
+            )).resultOfType(PatchProposalResult.class);
             return new Proposal(result.summary(), result.updates());
         }).toEither().mapLeft(exception -> new IncidentFailure(
             "PATCH_PROPOSAL_FAILED",

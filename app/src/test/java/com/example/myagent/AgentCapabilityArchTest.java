@@ -18,6 +18,22 @@ class AgentCapabilityArchTest {
     private static final int MAXIMUM_CAPABILITIES = 5;
 
     @Test
+    void everyEmbabelAgentMustBeATopLevelClass() {
+        var agentClasses = new ClassFileImporter()
+            .withImportOption(new ImportOption.DoNotIncludeTests())
+            .importPackages("com.example.myagent")
+            .stream()
+            .filter(type -> type.isAnnotatedWith(Agent.class))
+            .toList();
+
+        assertThat(agentClasses).allSatisfy(agentClass ->
+            assertThat(agentClass.getEnclosingClass())
+                .as("%s must be declared in its own source file", agentClass.getName())
+                .isEmpty()
+        );
+    }
+
+    @Test
     void everyEmbabelAgentMustHaveAtMostFiveSkillsAndFiveTools() {
         CapabilityCatalog catalog = loadCatalog();
         Set<String> registeredAgentNames = new ClassFileImporter()
