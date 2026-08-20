@@ -1,0 +1,28 @@
+{
+  "agents": [
+    {
+      "name": "natural-language-command-agent",
+      "parent": null,
+      "skills": ["natural-language-intent-parsing", "evidence-redaction"],
+      "tools": []
+    },
+    {
+      "name": "incident-analysis-agent",
+      "parent": null,
+      "skills": ["root-cause-analysis", "source-context-selection", "evidence-redaction"],
+      "tools": []
+    },
+    {
+      "name": "patch-author-agent",
+      "parent": null,
+      "skills": ["minimal-patch-proposal", "evidence-redaction"],
+      "tools": []
+    },
+    {
+      "name": "patch-review-agent",
+      "parent": null,
+      "skills": ["independent-patch-review", "evidence-redaction"],
+      "tools": []
+    }
+  ]
+}

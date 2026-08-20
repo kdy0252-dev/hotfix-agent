@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: my-agent
+  ai:
+    chat:
+      observations:
+        log-prompt: false
+        log-completion: false
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+agent:
+  ai:
+    input-budget:
+      max-tokens: ${AGENT_AI_MAX_INPUT_TOKENS:30000}
+      characters-per-token: ${AGENT_AI_CHARACTERS_PER_TOKEN:3}
+
+management:
+  otlp:
+    metrics:
+      export:
+        enabled: false

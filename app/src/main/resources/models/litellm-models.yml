@@ -1,0 +1,162 @@
+models:
+  - name: "chatgpt-5.4"
+    model_id: "chatgpt-5.4"
+    display_name: "LiteLLM ChatGPT 5.4"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "chatgpt-5.5"
+    model_id: "chatgpt-5.5"
+    display_name: "LiteLLM ChatGPT 5.5"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "chatgpt-5.6-luna"
+    model_id: "chatgpt-5.6-luna"
+    display_name: "LiteLLM ChatGPT 5.6 Luna"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "chatgpt-5.6-terra"
+    model_id: "chatgpt-5.6-terra"
+    display_name: "LiteLLM ChatGPT 5.6 Terra"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "chatgpt-5.6-sol"
+    model_id: "chatgpt-5.6-sol"
+    display_name: "LiteLLM ChatGPT 5.6 Sol"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "claude-haiku-4-5"
+    model_id: "claude-haiku-4-5"
+    display_name: "LiteLLM Claude Haiku 4.5"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "claude-opus-4-8"
+    model_id: "claude-opus-4-8"
+    display_name: "LiteLLM Claude Opus 4.8"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "claude-opus-5"
+    model_id: "claude-opus-5"
+    display_name: "LiteLLM Claude Opus 5"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "claude-sonnet-4-6"
+    model_id: "claude-sonnet-4-6"
+    display_name: "LiteLLM Claude Sonnet 4.6"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "claude-sonnet-5"
+    model_id: "claude-sonnet-5"
+    display_name: "LiteLLM Claude Sonnet 5"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "deepseek-r1"
+    model_id: "deepseek-r1"
+    display_name: "LiteLLM DeepSeek R1"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "deepseek-v3.2"
+    model_id: "deepseek-v3.2"
+    display_name: "LiteLLM DeepSeek V3.2"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "gemini-3.1-flash-lite"
+    model_id: "gemini-3.1-flash-lite"
+    display_name: "LiteLLM Gemini 3.1 Flash Lite"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "gemini-3.5-flash"
+    model_id: "gemini-3.5-flash"
+    display_name: "LiteLLM Gemini 3.5 Flash"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "gemini-3.5-flash-lite"
+    model_id: "gemini-3.5-flash-lite"
+    display_name: "LiteLLM Gemini 3.5 Flash Lite"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "gemini-3.6-flash"
+    model_id: "gemini-3.6-flash"
+    display_name: "LiteLLM Gemini 3.6 Flash"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "gemma-4.26b"
+    model_id: "gemma-4.26b"
+    display_name: "LiteLLM Gemma 4 26B"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "glm-5"
+    model_id: "glm-5"
+    display_name: "LiteLLM GLM 5"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "gpt-oss-120b"
+    model_id: "gpt-oss-120b"
+    display_name: "LiteLLM GPT OSS 120B"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "grok-4.3"
+    model_id: "grok-4.3"
+    display_name: "LiteLLM Grok 4.3"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "haiku"
+    model_id: "haiku"
+    display_name: "LiteLLM Haiku"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "kimi-k2-thinking"
+    model_id: "kimi-k2-thinking"
+    display_name: "LiteLLM Kimi K2 Thinking"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "opus"
+    model_id: "opus"
+    display_name: "LiteLLM Opus"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "qwen3-80b-instruct"
+    model_id: "qwen3-80b-instruct"
+    display_name: "LiteLLM Qwen3 80B Instruct"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "qwen3-80b-thinking"
+    model_id: "qwen3-80b-thinking"
+    display_name: "LiteLLM Qwen3 80B Thinking"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "qwen3-coder-480b"
+    model_id: "qwen3-coder-480b"
+    display_name: "LiteLLM Qwen3 Coder 480B"
+    max_tokens: 16384
+    temperature: 1.0
+
+  - name: "sonnet"
+    model_id: "sonnet"
+    display_name: "LiteLLM Sonnet"
+    max_tokens: 16384
+    temperature: 1.0

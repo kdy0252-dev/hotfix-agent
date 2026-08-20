@@ -1,0 +1,91 @@
+[versions]
+java = "25"
+kotlin = "2.3.21"
+springBoot = "4.1.0"
+springModulith = "2.1.0"
+errorProne = "5.1.0"
+errorProneCore = "2.50.0"
+openRewrite = "7.37.0"
+openRewriteRecipeBom = "3.35.0"
+openRewriteBom = "8.87.6"
+openRewriteThirdParty = "0.43.0"
+checkstyle = "13.8.0"
+jib = "3.5.4"
+springDoc = "3.0.3"
+slf4j = "2.0.18"
+assertj = "3.27.7"
+thymeleafExtrasSpringSecurity = "3.1.5.RELEASE"
+testcontainers = "2.0.5"
+rsqlParser = "2.4.0"
+rsqlJpa = "7.0.2"
+querydsl = "5.1.0"
+jetbrainsAnnotations = "26.1.0"
+mapstruct = "1.6.3"
+firebaseAdmin = "9.10.0"
+hypersistenceUtils = "3.15.4"
+vavr = "1.0.1"
+wiremock = "3.13.2"
+awsSdk = "2.49.1"
+poi = "5.5.1"
+resilience4j = "2.4.0"
+embabel = "1.5.0"
+
+# Gateway
+springCloudDependencies = "2025.1.2"
+
+[libraries]
+spring-boot-gradle-plugin = { module = "org.springframework.boot:spring-boot-gradle-plugin", version.ref = "springBoot" }
+spring-boot-dependencies-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
+spring-docs = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springDoc" }
+errorprone-plugin = { module = "net.ltgt.gradle:gradle-errorprone-plugin", version.ref = "errorProne" }
+errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorProneCore" }
+rewrite-plugin = { module = "org.openrewrite.rewrite:org.openrewrite.rewrite.gradle.plugin", version.ref = "openRewrite" }
+jib-gradle-plugin = { module = "com.google.cloud.tools:jib-gradle-plugin", version.ref = "jib" }
+rewrite-recipe-bom = { module = "org.openrewrite.recipe:rewrite-recipe-bom", version.ref = "openRewriteRecipeBom" }
+rewrite-bom = { module = "org.openrewrite:rewrite-bom", version.ref = "openRewriteBom" }
+rewrite-third-party = { module = "org.openrewrite.recipe:rewrite-third-party", version.ref = "openRewriteThirdParty" }
+
+spring-modulith-bom = { module = "org.springframework.modulith:spring-modulith-bom", version.ref = "springModulith" }
+
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+thymeleaf-extras-springsecurity = { module = "org.thymeleaf.extras:thymeleaf-extras-springsecurity6", version.ref = "thymeleafExtrasSpringSecurity" }
+
+spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainers" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
+
+jmolecules-bom = { module = "org.jmolecules:jmolecules-bom", version = "2025.0.2" }
+jmolecules-ddd = { module = "org.jmolecules:jmolecules-ddd" }
+jmolecules-hexagonal-architecture = { module = "org.jmolecules:jmolecules-hexagonal-architecture" }
+jmolecules-archunit = { module = "org.jmolecules.integrations:jmolecules-archunit" }
+tngtech-archunit = { module = "com.tngtech.archunit:archunit-junit5", version = "1.4.2" }
+
+spring-cloud-dependencies-bom = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "springCloudDependencies" }
+
+rsql-parser = { module = "io.github.nstdio:rsql-parser", version.ref = "rsqlParser" }
+rsql-jpa = { module = "io.github.perplexhub:rsql-jpa", version.ref = "rsqlJpa" }
+querydsl-jpa = { module = "com.querydsl:querydsl-jpa", version.ref = "querydsl" }
+querydsl-apt = { module = "com.querydsl:querydsl-apt", version.ref = "querydsl" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrainsAnnotations" }
+mapstruct = { module = "org.mapstruct:mapstruct", version.ref = "mapstruct" }
+mapstruct-processor = { module = "org.mapstruct:mapstruct-processor", version.ref = "mapstruct" }
+firebase-admin = { module = "com.google.firebase:firebase-admin", version.ref = "firebaseAdmin" }
+hypersistence-utils-hibernate = { module = "io.hypersistence:hypersistence-utils-hibernate-71", version.ref = "hypersistenceUtils" }
+vavr = { module = "io.vavr:vavr", version.ref = "vavr" }
+h2-test = { module = "com.h2database:h2" }
+wiremock-standalone = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
+aws-sdk-bom = { module = "software.amazon.awssdk:bom", version.ref = "awsSdk" }
+aws-sdk-cognitoidentityprovider = { module = "software.amazon.awssdk:cognitoidentityprovider" }
+apache-poi = { module = "org.apache.poi:poi", version.ref = "poi" }
+apache-poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
+resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker", version.ref = "resilience4j" }
+resilience4j-bulkhead = { module = "io.github.resilience4j:resilience4j-bulkhead", version.ref = "resilience4j" }
+embabel-agent-starter-openai = { module = "com.embabel.agent:embabel-agent-starter-openai", version.ref = "embabel" }
+embabel-agent-test = { module = "com.embabel.agent:embabel-agent-test", version.ref = "embabel" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+errorprone = { id = "net.ltgt.errorprone", version.ref = "errorProne" }

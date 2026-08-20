@@ -1,0 +1,55 @@
+embabel:
+  agent:
+    platform:
+      models:
+        openai:
+          base-url: ${LITELLM_BASE_URL}
+          api-key: ${LITELLM_API_KEY}
+  models:
+    default-llm: ${LITELLM_MODEL:chatgpt-5.6-luna}
+    llms:
+      triage: ${LITELLM_TRIAGE_MODEL:${LITELLM_MODEL:chatgpt-5.6-luna}}
+      reasoning: ${LITELLM_REASONING_MODEL:${LITELLM_MODEL:chatgpt-5.6-luna}}
+      review: ${LITELLM_REVIEW_MODEL:${LITELLM_REASONING_MODEL:${LITELLM_MODEL:chatgpt-5.6-luna}}}
+
+agent:
+  integrations:
+    bitbucket:
+      base-url: ${BITBUCKET_BASE_URL:https://api.bitbucket.org/2.0}
+      git-base-url: ${BITBUCKET_GIT_BASE_URL:https://bitbucket.org}
+      workspace: ${BITBUCKET_WORKSPACE:autocrypt}
+      repository: ${BITBUCKET_REPOSITORY:fms}
+      token: ${BITBUCKET_TOKEN}
+    jenkins:
+      base-url: ${JENKINS_BASE_URL:https://jenkins.autocrypt-fms.io}
+      root-job: ${JENKINS_ROOT_JOB:FMS-EU}
+      username: ${JENKINS_USER}
+      api-token: ${JENKINS_TOKEN}
+      tls-verify: ${JENKINS_TLS_VERIFY:false}
+    grafana:
+      base-url: ${GRAFANA_BASE_URL:https://prod-grafana.autocrypt-fms.io}
+      token: ${GRAFANA_TOKEN}
+      tls-verify: ${GRAFANA_TLS_VERIFY:false}
+      datasource-uids:
+        loki: ${GRAFANA_LOKI_DATASOURCE_UID}
+        prometheus: ${GRAFANA_PROMETHEUS_DATASOURCE_UID}
+        tempo: ${GRAFANA_TEMPO_DATASOURCE_UID}
+  runtime:
+    mode: ${AGENT_MODE:REPORT_ONLY}
+    fms-repository-path: ${AGENT_FMS_REPOSITORY_PATH}
+    analysis-ttl: ${AGENT_ANALYSIS_TTL:24h}
+    state-path: ${AGENT_STATE_PATH:.agent/runtime}
+  observability:
+    scope:
+      region: eu
+      application: app
+      namespace-template: fms-eu-%s
+      service-name-template: fms-eu-%s-app
+  verification:
+    parity:
+      max-patch-retries: 2
+      approved-profiles:
+        998043b4f8e26abe2e5a0c6a53f9b6a8d4cd26d92a32d922aea6faea5f9f5179: 1
+
+server:
+  address: ${AGENT_API_BIND_ADDRESS:127.0.0.1}
