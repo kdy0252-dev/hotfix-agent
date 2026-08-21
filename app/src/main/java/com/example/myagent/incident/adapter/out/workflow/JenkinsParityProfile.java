@@ -30,9 +30,9 @@ final class JenkinsParityProfile {
         return GRADLE_TASKS;
     }
 
-    static List<String> gradleCommand() {
+    static List<String> gradleCommand(int maximumWorkers) {
         var command = new ArrayList<>(List.of(
-            "./gradlew", "--parallel", "--max-workers=6"
+            "./gradlew", "--parallel", "--max-workers=" + maximumWorkers
         ));
         command.addAll(GRADLE_TASKS);
         return List.copyOf(command);

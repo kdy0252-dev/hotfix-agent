@@ -63,17 +63,23 @@ public class BitbucketSourceRevisionAdapter implements SourceRevisionPort {
         if (!"OPEN".equals(response.path("state").asString())) {
             throw new IllegalStateException("Pull request is not open");
         }
+        String sourceCommit = required(
+            response.path("source").path("commit").path("hash").asString(),
+            "pull request source commit"
+        );
         return new SourceRevision(
-            required(
-                response.path("source").path("commit").path("hash").asString(),
-                "pull request source commit"
-            ),
+            canonicalCommit(sourceCommit),
             required(
                 response.path("source").path("branch").path("name").asString(),
                 "pull request source branch"
             ),
             "bitbucket:pull-request:" + source.pullRequestId()
         );
+    }
+
+    private String canonicalCommit(String reference) throws Exception {
+        JsonNode response = get(repositoryUrl("commit/" + encode(reference)));
+        return required(response.path("hash").asString(), "canonical commit");
     }
 
     private JsonNode get(URI uri) throws Exception {

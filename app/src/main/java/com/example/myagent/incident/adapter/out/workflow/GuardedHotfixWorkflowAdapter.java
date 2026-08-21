@@ -116,7 +116,7 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
     ) {
         Workspace workspace = initialWorkspace;
         String previousFailure = "none";
-        int maximumAttempts = parityProperties.maxPatchRetries() + 1;
+        int maximumAttempts = parityProperties.limits().maxPatchRetries() + 1;
         for (int attempt = 1; attempt <= maximumAttempts; attempt++) {
             var proposal = patchProposal.propose(new PatchProposalPort.PatchRequest(
                 candidate, workspace, attempt, previousFailure

@@ -4,13 +4,17 @@ import com.embabel.agent.api.annotation.AchievesGoal;
 import com.embabel.agent.api.annotation.Action;
 import com.embabel.agent.api.annotation.Agent;
 import com.embabel.agent.api.common.OperationContext;
+import com.embabel.agent.core.ActionRetryPolicy;
+import com.embabel.common.ai.model.LlmOptions;
+import com.example.myagent.global.configuration.AiInputBudgetProperties.Role;
 import com.example.myagent.global.support.LlmPromptBudget;
 import java.util.List;
 
 @Agent(
     name = "patch-author-agent",
     description = "Creates a minimal bounded source patch for one explicitly selected candidate",
-    beanName = "patchAuthorAgent"
+    beanName = "patchAuthorAgent",
+    actionRetryPolicy = ActionRetryPolicy.FIRE_ONCE
 )
 public class PatchAuthorAgent {
     private final LlmPromptBudget promptBudget;
@@ -31,7 +35,7 @@ public class PatchAuthorAgent {
             Maximum 10 files and 500 changed lines. Preserve project style and add or update a focused test.
 
             """;
-        String prompt = promptBudget.compose(instructions, List.of(
+        var prompt = promptBudget.compose(Role.REASONING, instructions, List.of(
             new LlmPromptBudget.Section("Candidate", input.candidate().toString()),
             new LlmPromptBudget.Section("Attempt", Integer.toString(input.attempt())),
             new LlmPromptBudget.Section(
@@ -44,8 +48,9 @@ public class PatchAuthorAgent {
             )
         ));
         return context.ai()
-            .withLlmByRole("reasoning")
+            .withLlm(LlmOptions.withLlmForRole("reasoning")
+                .withMaxTokens(prompt.maximumOutputTokens()))
             .withId("author-selected-hotfix-patch")
-            .createObject(prompt, PatchProposalResult.class);
+            .createObject(prompt.text(), PatchProposalResult.class);
     }
 }

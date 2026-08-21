@@ -78,6 +78,17 @@ class LocalGitPatchWorkspaceAdapterTest {
     }
 
     @Test
+    void mapsAJenkinsWorkspaceLocationToTheEuRepositoryPath() {
+        var candidate = candidate(
+            "/opt/jenkins-agent/workspace/FMS-EU_PR-1292/" + SOURCE_PATH + ":1"
+        );
+
+        var workspace = adapter.prepare(analysis(candidate), candidate, hotfixId()).get();
+
+        assertThat(workspace.sourceFiles()).containsOnlyKeys(SOURCE_PATH);
+    }
+
+    @Test
     void rejectsJenkinsfileBeforeWritingIt() {
         var workspace = adapter.prepare(analysis(), candidate(), hotfixId()).get();
         var forbidden = new Proposal(
@@ -168,6 +179,10 @@ class LocalGitPatchWorkspaceAdapterTest {
     }
 
     private AnalysisSession analysis() {
+        return analysis(candidate());
+    }
+
+    private AnalysisSession analysis(BugCandidate candidate) {
         return new AnalysisSession(
             new AnalysisSession.Identity("analysis-1", 1, "hash"),
             new AnalysisSession.Snapshot(
@@ -178,13 +193,17 @@ class LocalGitPatchWorkspaceAdapterTest {
             ),
             new AnalysisSession.Result(
                 AnalysisSession.Status.CANDIDATES_READY,
-                List.of(candidate()),
+                List.of(candidate),
                 null
             )
         );
     }
 
     private BugCandidate candidate() {
+        return candidate(SOURCE_PATH + ":1");
+    }
+
+    private BugCandidate candidate(String sourceLocation) {
         return new BugCandidate(
             new BugCandidate.Identity(
                 "candidate-1",
@@ -194,7 +213,7 @@ class LocalGitPatchWorkspaceAdapterTest {
                 BugCandidate.Eligibility.ELIGIBLE
             ),
             new BugCandidate.Evidence(
-                List.of(SOURCE_PATH + ":1"),
+                List.of(sourceLocation),
                 List.of("test:evidence"),
                 List.of()
             ),

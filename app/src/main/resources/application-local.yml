@@ -47,7 +47,6 @@ agent:
       service-name-template: fms-eu-%s-app
   verification:
     parity:
-      max-patch-retries: 2
       approved-profiles:
         998043b4f8e26abe2e5a0c6a53f9b6a8d4cd26d92a32d922aea6faea5f9f5179: 1
 

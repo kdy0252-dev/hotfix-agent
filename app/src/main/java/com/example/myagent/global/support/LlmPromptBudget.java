@@ -1,27 +1,34 @@
 package com.example.myagent.global.support;
 
 import com.example.myagent.global.configuration.AiInputBudgetProperties;
+import com.example.myagent.global.configuration.AiInputBudgetProperties.Role;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
 public class LlmPromptBudget {
-    private final int maximumCharacters;
+    private final AiInputBudgetProperties properties;
 
     public LlmPromptBudget(AiInputBudgetProperties properties) {
-        this.maximumCharacters = Math.multiplyExact(
-            properties.maxTokens(),
+        this.properties = properties;
+    }
+
+    public Prompt compose(
+        Role role,
+        String instructions,
+        List<Section> prioritizedSections
+    ) {
+        var roleBudget = properties.forRole(role);
+        int maximumCharacters = Math.multiplyExact(
+            roleBudget.maxInputTokens(),
             properties.charactersPerToken()
         );
-    }
-
-    public String compose(String instructions, List<Section> prioritizedSections) {
         var prompt = new StringBuilder(limit(instructions, maximumCharacters));
-        prioritizedSections.forEach(section -> append(prompt, section));
-        return prompt.toString();
+        prioritizedSections.forEach(section -> append(prompt, section, maximumCharacters));
+        return new Prompt(prompt.toString(), roleBudget.maxOutputTokens());
     }
 
-    private void append(StringBuilder prompt, Section section) {
+    private void append(StringBuilder prompt, Section section, int maximumCharacters) {
         int remaining = maximumCharacters - prompt.length();
         if (remaining < 1) {
             return;
@@ -36,5 +43,8 @@ public class LlmPromptBudget {
     }
 
     public record Section(String label, String value) {
+    }
+
+    public record Prompt(String text, int maximumOutputTokens) {
     }
 }

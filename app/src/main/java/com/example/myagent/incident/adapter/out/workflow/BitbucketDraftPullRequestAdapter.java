@@ -113,7 +113,9 @@ public class BitbucketDraftPullRequestAdapter implements PullRequestPort {
         if (!"OPEN".equals(pullRequest.path("state").asString())) {
             throw new IllegalStateException("Source pull request is no longer open");
         }
-        return pullRequest.path("source").path("commit").path("hash").asString();
+        String reference = pullRequest.path("source").path("commit").path("hash").asString();
+        JsonNode commit = get(repositoryUrl("commit/" + encode(reference)));
+        return commit.path("hash").asString();
     }
 
     private JsonNode findOpenPullRequest(String branchName) throws Exception {
@@ -228,8 +230,10 @@ public class BitbucketDraftPullRequestAdapter implements PullRequestPort {
         return new Publication(pullRequestUrl, ciJobUrl);
     }
 
-    private void requireExpectedDraft(JsonNode pullRequest, String patchCommit) {
-        String sourceCommit = pullRequest.path("source").path("commit").path("hash").asString();
+    private void requireExpectedDraft(JsonNode pullRequest, String patchCommit) throws Exception {
+        String sourceReference = pullRequest.path("source").path("commit").path("hash").asString();
+        JsonNode commit = get(repositoryUrl("commit/" + encode(sourceReference)));
+        String sourceCommit = commit.path("hash").asString();
         if (!pullRequest.path("draft").asBoolean() || !patchCommit.equals(sourceCommit)) {
             throw new IllegalStateException("Pull request is not the expected Draft patch");
         }

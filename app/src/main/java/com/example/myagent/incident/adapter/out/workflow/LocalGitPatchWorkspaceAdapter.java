@@ -245,7 +245,12 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
         if (location == null) {
             return "";
         }
-        return normalizeRelative(location.replaceFirst(":\\d+(?::\\d+)?$", ""));
+        String path = location.replaceFirst(":\\d+(?::\\d+)?$", "").replace('\\', '/');
+        int euRoot = path.indexOf("/eu/");
+        if (euRoot >= 0) {
+            return normalizeRelative(path.substring(euRoot + 1));
+        }
+        return Path.of(path).isAbsolute() ? "" : normalizeRelative(path);
     }
 
     private boolean isSourcePath(String path) {

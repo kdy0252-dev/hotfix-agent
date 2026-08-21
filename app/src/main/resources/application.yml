@@ -17,10 +17,38 @@ spring:
 agent:
   ai:
     input-budget:
-      max-tokens: ${AGENT_AI_MAX_INPUT_TOKENS:30000}
+      triage:
+        max-input-tokens: ${AGENT_AI_TRIAGE_MAX_INPUT_TOKENS:8000}
+        max-output-tokens: ${AGENT_AI_TRIAGE_MAX_OUTPUT_TOKENS:1500}
+      reasoning:
+        max-input-tokens: ${AGENT_AI_REASONING_MAX_INPUT_TOKENS:16000}
+        max-output-tokens: ${AGENT_AI_REASONING_MAX_OUTPUT_TOKENS:4000}
+      review:
+        max-input-tokens: ${AGENT_AI_REVIEW_MAX_INPUT_TOKENS:8000}
+        max-output-tokens: ${AGENT_AI_REVIEW_MAX_OUTPUT_TOKENS:1500}
       characters-per-token: ${AGENT_AI_CHARACTERS_PER_TOKEN:3}
+  verification:
+    parity:
+      limits:
+        max-patch-retries: 2
+        max-workers: ${AGENT_PARITY_MAX_WORKERS:2}
+      newman-workspace-root: ${AGENT_NEWMAN_WORKSPACE_ROOT:${AGENT_STATE_PATH:.agent/runtime}}
+
+embabel:
+  agent:
+    platform:
+      llm-operations:
+        data-binding:
+          max-attempts: ${AGENT_AI_DATA_BINDING_MAX_ATTEMPTS:1}
+      models:
+        openai:
+          max-attempts: ${AGENT_AI_PROVIDER_MAX_ATTEMPTS:1}
 
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
   otlp:
     metrics:
       export:

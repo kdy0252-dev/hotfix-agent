@@ -3,6 +3,7 @@ package com.example.myagent;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.embabel.agent.api.annotation.Agent;
+import com.embabel.agent.core.ActionRetryPolicy;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import io.vavr.control.Try;
@@ -30,6 +31,22 @@ class AgentCapabilityArchTest {
             assertThat(agentClass.getEnclosingClass())
                 .as("%s must be declared in its own source file", agentClass.getName())
                 .isEmpty()
+        );
+    }
+
+    @Test
+    void everyEmbabelAgentMustDisableImplicitActionRetries() {
+        var agentClasses = new ClassFileImporter()
+            .withImportOption(new ImportOption.DoNotIncludeTests())
+            .importPackages("com.example.myagent")
+            .stream()
+            .filter(type -> type.isAnnotatedWith(Agent.class))
+            .toList();
+
+        assertThat(agentClasses).allSatisfy(agentClass ->
+            assertThat(agentClass.getAnnotationOfType(Agent.class).actionRetryPolicy())
+                .as("%s action retry policy", agentClass.getName())
+                .isEqualTo(ActionRetryPolicy.FIRE_ONCE)
         );
     }
 

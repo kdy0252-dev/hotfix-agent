@@ -63,8 +63,11 @@ class BitbucketSourceRevisionAdapterTest {
     void fixesAnOpenPullRequestToItsSourceCommitAndBranch() {
         var revision = adapter.resolve(SourceSpec.pullRequest(1285)).get();
 
-        assertThat(paths).containsExactly("/repositories/autocrypt/fms/pullrequests/1285");
-        assertThat(revision.commit()).isEqualTo("pr-commit");
+        assertThat(paths).containsExactly(
+            "/repositories/autocrypt/fms/pullrequests/1285",
+            "/repositories/autocrypt/fms/commit/pr-commit"
+        );
+        assertThat(revision.commit()).isEqualTo("canonical-pr-commit");
         assertThat(revision.destinationBranch()).isEqualTo("feature/pr-1285");
         assertThat(revision.provenance()).isEqualTo("bitbucket:pull-request:1285");
     }
@@ -82,8 +85,15 @@ class BitbucketSourceRevisionAdapterTest {
         paths.add(exchange.getRequestURI().getRawPath());
         assertThat(exchange.getRequestHeaders().getFirst("Authorization"))
             .isEqualTo("Bearer bitbucket-token");
-        String response = exchange.getRequestURI().getPath().contains("pullrequests")
-            ? pullRequestResponse() : "{\"target\":{\"hash\":\"branch-commit\"}}";
+        String path = exchange.getRequestURI().getPath();
+        String response;
+        if (path.contains("pullrequests")) {
+            response = pullRequestResponse();
+        } else if (path.contains("/commit/")) {
+            response = "{\"hash\":\"canonical-pr-commit\"}";
+        } else {
+            response = "{\"target\":{\"hash\":\"branch-commit\"}}";
+        }
         byte[] body = response.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(200, body.length);
         try (var output = exchange.getResponseBody()) {

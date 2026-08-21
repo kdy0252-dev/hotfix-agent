@@ -3,6 +3,7 @@ package com.example.myagent;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.embabel.agent.config.models.openai.OpenAiProperties;
+import com.embabel.agent.spi.support.LlmDataBindingProperties;
 import com.embabel.common.ai.model.ConfigurableModelProviderProperties;
 import com.example.myagent.global.configuration.AgentRuntimeProperties;
 import com.example.myagent.global.configuration.AiInputBudgetProperties;
@@ -64,6 +65,9 @@ class LocalIntegrationConfigurationTest {
     OpenAiProperties openAiProperties;
 
     @Autowired
+    LlmDataBindingProperties llmDataBindingProperties;
+
+    @Autowired
     ConfigurableModelProviderProperties modelProviderProperties;
 
     @Test
@@ -94,8 +98,15 @@ class LocalIntegrationConfigurationTest {
         assertThat(agentRuntimeProperties.mode()).isEqualTo(AgentRuntimeProperties.Mode.REPORT_ONLY);
         assertThat(agentRuntimeProperties.fmsRepositoryPath()).isEqualTo(Path.of("/tmp/fms-test"));
         assertThat(agentRuntimeProperties.analysisTtl()).isEqualTo(Duration.ofHours(24));
-        assertThat(aiInputBudgetProperties.maxTokens()).isEqualTo(30_000);
+        assertThat(aiInputBudgetProperties.triage().maxInputTokens()).isEqualTo(8_000);
+        assertThat(aiInputBudgetProperties.triage().maxOutputTokens()).isEqualTo(1_500);
+        assertThat(aiInputBudgetProperties.reasoning().maxInputTokens()).isEqualTo(16_000);
+        assertThat(aiInputBudgetProperties.reasoning().maxOutputTokens()).isEqualTo(4_000);
+        assertThat(aiInputBudgetProperties.review().maxInputTokens()).isEqualTo(8_000);
+        assertThat(aiInputBudgetProperties.review().maxOutputTokens()).isEqualTo(1_500);
         assertThat(aiInputBudgetProperties.charactersPerToken()).isEqualTo(3);
+        assertThat(openAiProperties.getMaxAttempts()).isEqualTo(1);
+        assertThat(llmDataBindingProperties.getMaxAttempts()).isEqualTo(1);
 
         assertThat(observabilityScopeProperties.region()).isEqualTo("eu");
         assertThat(observabilityScopeProperties.application()).isEqualTo("app");

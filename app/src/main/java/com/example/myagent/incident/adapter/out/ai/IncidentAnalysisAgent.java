@@ -4,6 +4,9 @@ import com.embabel.agent.api.annotation.AchievesGoal;
 import com.embabel.agent.api.annotation.Action;
 import com.embabel.agent.api.annotation.Agent;
 import com.embabel.agent.api.common.OperationContext;
+import com.embabel.agent.core.ActionRetryPolicy;
+import com.embabel.common.ai.model.LlmOptions;
+import com.example.myagent.global.configuration.AiInputBudgetProperties.Role;
 import com.example.myagent.global.support.LlmPromptBudget;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisEvidence;
 import com.example.myagent.incident.application.domain.model.analysis.SourceContext;
@@ -14,7 +17,8 @@ import java.util.Locale;
 @Agent(
     name = "incident-analysis-agent",
     description = "Creates evidence-grounded bug candidates from Jenkins or EU app observability evidence",
-    beanName = "incidentAnalysisAgent"
+    beanName = "incidentAnalysisAgent",
+    actionRetryPolicy = ActionRetryPolicy.FIRE_ONCE
 )
 public class IncidentAnalysisAgent {
     private final LlmPromptBudget promptBudget;
@@ -73,7 +77,7 @@ public class IncidentAnalysisAgent {
             a minimal fix summary, and a verification summary. Do not output secrets or full logs.
 
             """;
-        String prompt = promptBudget.compose(instructions, List.of(
+        var prompt = promptBudget.compose(Role.REASONING, instructions, List.of(
             new LlmPromptBudget.Section("Source revision", input.sourceRevision().commit()),
             new LlmPromptBudget.Section(
                 "Destination branch",
@@ -85,9 +89,10 @@ public class IncidentAnalysisAgent {
             new LlmPromptBudget.Section("Source context", input.sourceContext().toString())
         ));
         return context.ai()
-            .withLlmByRole("reasoning")
+            .withLlm(LlmOptions.withLlmForRole("reasoning")
+                .withMaxTokens(prompt.maximumOutputTokens()))
             .withId("prepare-incident-candidates")
-            .createObject(prompt, CandidateSet.class);
+            .createObject(prompt.text(), CandidateSet.class);
     }
 
     private TriageSummary triage(
@@ -103,15 +108,16 @@ public class IncidentAnalysisAgent {
             Preserve concrete exception, failed test, time, trace, and source-location signals.
             Return missing or contradictory evidence explicitly and do not include secrets or full logs.
             """;
-        String prompt = promptBudget.compose(instructions, List.of(
+        var prompt = promptBudget.compose(Role.TRIAGE, instructions, List.of(
             new LlmPromptBudget.Section("Task", material.task()),
             new LlmPromptBudget.Section("Source revision", sourceRevision.commit()),
             new LlmPromptBudget.Section("Evidence", material.evidence())
         ));
         TriageDraft draft = context.ai()
-            .withLlmByRole("triage")
+            .withLlm(LlmOptions.withLlmForRole("triage")
+                .withMaxTokens(prompt.maximumOutputTokens()))
             .withId("triage-" + material.evidenceType().toLowerCase(Locale.ROOT))
-            .createObject(prompt, TriageDraft.class);
+            .createObject(prompt.text(), TriageDraft.class);
         return new TriageSummary(
             material.evidenceType(),
             draft,

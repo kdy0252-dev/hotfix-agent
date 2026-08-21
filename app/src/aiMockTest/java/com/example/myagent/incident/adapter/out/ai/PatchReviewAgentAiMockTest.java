@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.embabel.agent.test.unit.FakeOperationContext;
 import com.example.myagent.global.configuration.AiInputBudgetProperties;
+import com.example.myagent.global.configuration.AiInputBudgetProperties.RoleBudget;
 import com.example.myagent.global.support.LlmPromptBudget;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.AppliedPatch;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.ChangeSummary;
@@ -40,6 +41,7 @@ class PatchReviewAgentAiMockTest {
             .contains("Independently review", "Do not call tools")
             .contains("patch123");
         assertThat(invocation.getInteraction().getToolGroups()).isEmpty();
+        assertThat(invocation.getInteraction().getLlm().getMaxTokens()).isEqualTo(4_000);
     }
 
     private Workspace workspace() {
@@ -55,6 +57,9 @@ class PatchReviewAgentAiMockTest {
     }
 
     private LlmPromptBudget promptBudget() {
-        return new LlmPromptBudget(new AiInputBudgetProperties(30_000, 3));
+        var roleBudget = new RoleBudget(30_000, 4_000);
+        return new LlmPromptBudget(new AiInputBudgetProperties(
+            roleBudget, roleBudget, roleBudget, 3
+        ));
     }
 }

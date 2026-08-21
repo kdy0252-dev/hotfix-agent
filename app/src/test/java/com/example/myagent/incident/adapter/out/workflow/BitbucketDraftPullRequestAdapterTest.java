@@ -47,14 +47,18 @@ class BitbucketDraftPullRequestAdapterTest {
     private BitbucketDraftPullRequestAdapter adapter;
     private boolean existingDraft;
     private String sourceCommit;
+    private String sourceCommitReference;
     private String expectedPatchCommit;
+    private String patchCommitReference;
     private String postedBody;
 
     @BeforeEach
     void setUp() throws Exception {
         existingDraft = true;
         sourceCommit = BASE_COMMIT;
+        sourceCommitReference = BASE_COMMIT;
         expectedPatchCommit = PATCH_COMMIT;
+        patchCommitReference = PATCH_COMMIT;
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/", this::serve);
         server.start();
@@ -87,9 +91,11 @@ class BitbucketDraftPullRequestAdapterTest {
     void reusesTheExpectedExistingDraftWithoutPublishingAgain() {
         var result = adapter.publishDraft(request(verification(0))).get();
 
-        assertThat(requests).hasSize(2);
+        assertThat(requests).hasSize(3);
         assertThat(requests.get(0)).contains("GET /repositories/autocrypt/fms/refs/branches/main");
         assertThat(requests.get(1)).contains("GET /repositories/autocrypt/fms/pullrequests?");
+        assertThat(requests.get(2))
+            .contains("GET /repositories/autocrypt/fms/commit/patch123");
         assertThat(result.pullRequestUrl()).isEqualTo("https://bitbucket.example/pr/99");
         assertThat(result.ciJobUrl())
             .isEqualTo("https://jenkins.example.com/job/FMS-EU/job/PR-99/");
@@ -101,6 +107,30 @@ class BitbucketDraftPullRequestAdapterTest {
 
         assertThat(result.getLeft().code()).isEqualTo("DRAFT_PULL_REQUEST_FAILED");
         assertThat(requests).isEmpty();
+    }
+
+    @Test
+    void canonicalizesAnAbbreviatedPullRequestCommitBeforeFreshnessCheck() {
+        sourceCommitReference = "base-short";
+
+        var result = adapter.publishDraft(request(
+            verification(0),
+            BASE_COMMIT,
+            PATCH_COMMIT,
+            "/not-used",
+            SourceSpec.pullRequest(1285)
+        ));
+
+        assertThat(result.isRight()).isTrue();
+        assertThat(requests).hasSize(4);
+        assertThat(requests.get(0))
+            .contains("GET /repositories/autocrypt/fms/pullrequests/1285");
+        assertThat(requests.get(1))
+            .contains("GET /repositories/autocrypt/fms/commit/base-short");
+        assertThat(requests.get(2))
+            .contains("GET /repositories/autocrypt/fms/pullrequests?");
+        assertThat(requests.get(3))
+            .contains("GET /repositories/autocrypt/fms/commit/patch123");
     }
 
     @Test
@@ -128,6 +158,7 @@ class BitbucketDraftPullRequestAdapterTest {
             "commit", "-m", "patch"
         ));
         expectedPatchCommit = output(worktree, List.of("git", "rev-parse", "HEAD"));
+        patchCommitReference = expectedPatchCommit.substring(0, 12);
         adapter = adapter(remoteRoot.toUri());
 
         var result = adapter.publishDraft(request(
@@ -159,10 +190,26 @@ class BitbucketDraftPullRequestAdapterTest {
         String patchCommit,
         String worktreePath
     ) {
+        return request(
+            verification,
+            baseCommit,
+            patchCommit,
+            worktreePath,
+            SourceSpec.branch("main")
+        );
+    }
+
+    private PublicationRequest request(
+        Verification verification,
+        String baseCommit,
+        String patchCommit,
+        String worktreePath,
+        SourceSpec source
+    ) {
         var analysis = new AnalysisSession(
             new AnalysisSession.Identity("analysis-1", 1, "request-hash"),
             new AnalysisSession.Snapshot(
-                SourceSpec.branch("main"),
+                source,
                 new SourceRevision(baseCommit, "main", "bitbucket:branch:main"),
                 Instant.parse("2026-08-20T00:00:00Z"),
                 Instant.parse("2026-08-21T00:00:00Z")
@@ -221,7 +268,18 @@ class BitbucketDraftPullRequestAdapterTest {
             .isEqualTo("Bearer bitbucket-token");
         String path = exchange.getRequestURI().getPath();
         String response;
-        if (path.contains("refs/branches")) {
+        if (path.endsWith("/pullrequests/1285")) {
+            response = """
+                {
+                  "state":"OPEN",
+                  "source":{"commit":{"hash":"%s"}}
+                }
+                """.formatted(sourceCommitReference);
+        } else if (path.contains("/commit/")) {
+            String resolvedCommit = path.endsWith('/' + sourceCommitReference)
+                ? sourceCommit : expectedPatchCommit;
+            response = "{\"hash\":\"" + resolvedCommit + "\"}";
+        } else if (path.contains("refs/branches")) {
             response = "{\"target\":{\"hash\":\"" + sourceCommit + "\"}}";
         } else if ("POST".equals(exchange.getRequestMethod())) {
             postedBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
@@ -245,7 +303,7 @@ class BitbucketDraftPullRequestAdapterTest {
               "source":{"commit":{"hash":"%s"}},
               "links":{"html":{"href":"https://bitbucket.example/pr/99"}}
             }
-            """.formatted(expectedPatchCommit);
+            """.formatted(patchCommitReference);
     }
 
     private BitbucketDraftPullRequestAdapter adapter(URI gitBaseUrl) {

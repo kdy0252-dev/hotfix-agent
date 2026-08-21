@@ -27,8 +27,8 @@ class JenkinsParityProfileTest {
             ":eu:eu-gateway:jacocoTestReport", ":eu:eu-metrics:jacocoTestReport",
             ":eu:eu-app:externalApiTest"
         );
-        assertThat(JenkinsParityProfile.gradleCommand())
-            .startsWith("./gradlew", "--parallel", "--max-workers=6")
+        assertThat(JenkinsParityProfile.gradleCommand(2))
+            .startsWith("./gradlew", "--parallel", "--max-workers=2")
             .endsWith(":eu:eu-app:externalApiTest");
     }
 }

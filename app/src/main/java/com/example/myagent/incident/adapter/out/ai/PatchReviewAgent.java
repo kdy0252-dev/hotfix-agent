@@ -4,13 +4,17 @@ import com.embabel.agent.api.annotation.AchievesGoal;
 import com.embabel.agent.api.annotation.Action;
 import com.embabel.agent.api.annotation.Agent;
 import com.embabel.agent.api.common.OperationContext;
+import com.embabel.agent.core.ActionRetryPolicy;
+import com.embabel.common.ai.model.LlmOptions;
+import com.example.myagent.global.configuration.AiInputBudgetProperties.Role;
 import com.example.myagent.global.support.LlmPromptBudget;
 import java.util.List;
 
 @Agent(
     name = "patch-review-agent",
     description = "Independently reviews an applied patch against its candidate and safety policy",
-    beanName = "patchReviewAgent"
+    beanName = "patchReviewAgent",
+    actionRetryPolicy = ActionRetryPolicy.FIRE_ONCE
 )
 public class PatchReviewAgent {
     private final LlmPromptBudget promptBudget;
@@ -29,13 +33,14 @@ public class PatchReviewAgent {
             Do not call tools and do not suggest merge, release, tag, or deploy operations.
 
             """;
-        String prompt = promptBudget.compose(instructions, List.of(
+        var prompt = promptBudget.compose(Role.REVIEW, instructions, List.of(
             new LlmPromptBudget.Section("Candidate", input.candidate().toString()),
             new LlmPromptBudget.Section("Applied patch", input.patch().toString())
         ));
         return context.ai()
-            .withLlmByRole("review")
+            .withLlm(LlmOptions.withLlmForRole("review")
+                .withMaxTokens(prompt.maximumOutputTokens()))
             .withId("review-applied-hotfix-patch")
-            .createObject(prompt, PatchReviewResult.class);
+            .createObject(prompt.text(), PatchReviewResult.class);
     }
 }

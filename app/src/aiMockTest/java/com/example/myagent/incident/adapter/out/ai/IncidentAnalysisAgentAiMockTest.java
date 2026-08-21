@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.embabel.agent.test.unit.FakeOperationContext;
 import com.example.myagent.global.configuration.AiInputBudgetProperties;
+import com.example.myagent.global.configuration.AiInputBudgetProperties.RoleBudget;
 import com.example.myagent.global.support.LlmPromptBudget;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisEvidence;
 import com.example.myagent.incident.application.domain.model.analysis.SourceContext;
@@ -42,8 +43,9 @@ class IncidentAnalysisAgentAiMockTest {
         var context = FakeOperationContext.create();
         context.expectResponse(triage);
         context.expectResponse(expected);
+        var roleBudget = new RoleBudget(30_000, 4_000);
         var agent = new IncidentAnalysisAgent(new LlmPromptBudget(
-            new AiInputBudgetProperties(30_000, 3)
+            new AiInputBudgetProperties(roleBudget, roleBudget, roleBudget, 3)
         ));
         var input = new IncidentAnalysisAgent.JenkinsAnalysisInput(
             new AnalysisEvidence.Jenkins(
@@ -70,6 +72,7 @@ class IncidentAnalysisAgentAiMockTest {
             .contains("NullPointerException", "abc123", "untrusted data")
             .doesNotContain("class BookingService {}");
         assertThat(triageInvocation.getInteraction().getId()).isEqualTo("triage-jenkins");
+        assertThat(triageInvocation.getInteraction().getLlm().getMaxTokens()).isEqualTo(4_000);
         var reasoningInvocation = context.getLlmInvocations().get(1);
         assertThat(reasoningInvocation.getPrompt())
             .contains(

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.myagent.global.configuration.AgentRuntimeProperties;
 import com.example.myagent.global.configuration.ParityProfileProperties;
+import com.example.myagent.global.configuration.ParityProfileProperties.ExecutionLimits;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisSession;
 import com.example.myagent.incident.application.domain.model.analysis.BugCandidate;
 import com.example.myagent.incident.application.domain.model.analysis.SourceRevision;
@@ -58,7 +59,11 @@ class GuardedHotfixWorkflowAdapterTest {
             verificationPort,
             reviewPort,
             pullRequestPort,
-            new ParityProfileProperties(Map.of("jenkins-hash", 1), 2),
+            new ParityProfileProperties(
+                Map.of("jenkins-hash", 1),
+                new ExecutionLimits(2, 2),
+                Path.of(".agent/runtime")
+            ),
             new AgentRuntimeProperties(
                 AgentRuntimeProperties.Mode.DRAFT_PR,
                 Path.of("/tmp/fms"),

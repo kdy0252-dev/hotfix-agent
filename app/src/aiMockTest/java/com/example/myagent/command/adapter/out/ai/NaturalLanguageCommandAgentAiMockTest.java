@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.embabel.agent.test.unit.FakeOperationContext;
 import com.example.myagent.command.application.domain.model.interpretation.CommandInterpretationDraft;
+import com.example.myagent.global.configuration.AiInputBudgetProperties;
+import com.example.myagent.global.configuration.AiInputBudgetProperties.RoleBudget;
+import com.example.myagent.global.support.LlmPromptBudget;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +32,10 @@ class NaturalLanguageCommandAgentAiMockTest {
         );
         var context = FakeOperationContext.create();
         context.expectResponse(expected);
-        var agent = new NaturalLanguageCommandAgent();
+        var roleBudget = new RoleBudget(30_000, 4_000);
+        var agent = new NaturalLanguageCommandAgent(new LlmPromptBudget(
+            new AiInputBudgetProperties(roleBudget, roleBudget, roleBudget, 3)
+        ));
 
         var result = agent.interpret(
             new NaturalLanguageCommandAgent.NaturalLanguageInput("PR 1285 빌드 181을 분석해줘"),
@@ -40,9 +46,10 @@ class NaturalLanguageCommandAgentAiMockTest {
         assertThat(context.getLlmInvocations()).hasSize(1);
         var invocation = context.getLlmInvocations().getFirst();
         assertThat(invocation.getPrompt())
-            .contains("<untrusted-user-text>", "PR 1285 빌드 181을 분석해줘")
+            .contains("Untrusted user text", "PR 1285 빌드 181을 분석해줘")
             .contains("Allowed intents only");
         assertThat(invocation.getInteraction().getToolGroups()).isEmpty();
+        assertThat(invocation.getInteraction().getLlm().getMaxTokens()).isEqualTo(4_000);
         assertThat(invocation.getInteraction().getId())
             .isEqualTo("interpret-natural-language-command");
     }

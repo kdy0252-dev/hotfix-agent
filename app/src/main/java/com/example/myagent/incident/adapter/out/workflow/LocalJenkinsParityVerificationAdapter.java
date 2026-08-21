@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
@@ -48,7 +49,10 @@ public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
         return Try.of(() -> {
             Path worktree = Path.of(patch.workspace().worktreePath());
             List<String> tasks = focusedTasks(patch.changes().files());
-            var command = new ArrayList<>(List.of("./gradlew", "--parallel"));
+            var command = new ArrayList<>(List.of(
+                "./gradlew", "--parallel",
+                "--max-workers=" + properties.limits().maxWorkers()
+            ));
             command.addAll(tasks);
             var result = LocalProcessExecutor.run(worktree, command);
             return Verification.focused(
@@ -79,7 +83,7 @@ public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
             runStage(
                 worktree,
                 JenkinsParityProfile.GRADLE_STAGE,
-                JenkinsParityProfile.gradleCommand(),
+                JenkinsParityProfile.gradleCommand(properties.limits().maxWorkers()),
                 Map.of(),
                 stages
             );
@@ -101,7 +105,8 @@ public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
                 worktree,
                 JenkinsParityProfile.IMAGE_STAGE,
                 List.of(
-                    "./gradlew", "--no-configuration-cache", "--parallel", "--max-workers=6",
+                    "./gradlew", "--no-configuration-cache", "--parallel",
+                    "--max-workers=" + properties.limits().maxWorkers(),
                     ":eu:eu-app:jibDockerBuild", ":eu:eu-gateway:jibDockerBuild",
                     ":eu:eu-metrics:jibDockerBuild"
                 ),
@@ -117,12 +122,7 @@ public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
                 worktree,
                 JenkinsParityProfile.INTEGRATION_STAGE,
                 List.of("sh", "eu/ci/run-integration-tests.sh"),
-                Map.of(
-                    "APP_IMAGE", "eu-app:" + runtimeTag,
-                    "GATEWAY_IMAGE", "eu-gateway:" + runtimeTag,
-                    "METRICS_IMAGE", "eu-metrics:" + runtimeTag,
-                    "COMPOSE_PROJECT_NAME", "fms-hotfix-" + patch.patchCommit().substring(0, 8)
-                ),
+                integrationEnvironment(worktree, patch.patchCommit(), runtimeTag),
                 stages
             );
             return new Verification(
@@ -147,6 +147,37 @@ public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
                 "JENKINS_PARITY_EXECUTION_FAILED",
                 "Jenkins 동등성 검증을 실행하지 못했습니다."
             ));
+    }
+
+    private Map<String, String> integrationEnvironment(
+        Path worktree,
+        String patchCommit,
+        String runtimeTag
+    ) {
+        String projectPrefix = "fms-hotfix-" + patchCommit.substring(0, 8);
+        Path newmanWorkspace = properties.newmanWorkspaceRoot()
+            .resolve("worktrees")
+            .resolve(worktree.getFileName());
+        return Map.ofEntries(
+            Map.entry("APP_IMAGE", "eu-app:" + runtimeTag),
+            Map.entry("GATEWAY_IMAGE", "eu-gateway:" + runtimeTag),
+            Map.entry("METRICS_IMAGE", "eu-metrics:" + runtimeTag),
+            Map.entry("COMPOSE_PROJECT_PREFIX", projectPrefix),
+            Map.entry("COMPOSE_PROJECT_NAME", projectPrefix + "-run"),
+            Map.entry(
+                "COMPOSE_FILE_PATH",
+                newmanWorkspace.resolve("eu/compose.yml").toString()
+            ),
+            Map.entry(
+                "COMPOSE_CI_FILE_PATH",
+                newmanWorkspace.resolve("eu/compose-ci.yml").toString()
+            ),
+            Map.entry("NEWMAN_REPORT_DIR", "build/newman"),
+            Map.entry("CI_RESOURCE_CREATED_AT", Long.toString(Instant.now().getEpochSecond())),
+            Map.entry("WORKSPACE", newmanWorkspace.toString()),
+            Map.entry("CI_UID", "0"),
+            Map.entry("CI_GID", "0")
+        );
     }
 
     private void runStage(

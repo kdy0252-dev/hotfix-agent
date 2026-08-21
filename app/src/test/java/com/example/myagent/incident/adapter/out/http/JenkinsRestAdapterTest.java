@@ -118,7 +118,12 @@ class JenkinsRestAdapterTest {
             {
               "building": false,
               "result": "%s",
-              "actions": [{"lastBuiltRevision":{"SHA1":"commit-181"}}]
+              "actions": [{
+                "lastBuiltRevision": {
+                  "SHA1": "synthetic-merge-commit",
+                  "branch": [{"SHA1":"commit-181","name":"PR-1292"}]
+                }
+              }]
             }
             """.formatted(buildResult);
     }

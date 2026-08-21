@@ -121,6 +121,14 @@ public class JenkinsRestAdapter implements JenkinsEvidencePort {
 
     private String revision(JsonNode metadata) {
         for (JsonNode action : metadata.path("actions")) {
+            String branchSha = action.path("lastBuiltRevision")
+                .path("branch")
+                .path(0)
+                .path("SHA1")
+                .asString();
+            if (!branchSha.isBlank()) {
+                return branchSha;
+            }
             String sha = action.path("lastBuiltRevision").path("SHA1").asString();
             if (!sha.isBlank()) {
                 return sha;
