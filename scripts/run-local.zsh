@@ -33,6 +33,7 @@ export AGENT_MODE="${AGENT_MODE:-REPORT_ONLY}"
 export AGENT_FMS_REPOSITORY_PATH="${AGENT_FMS_REPOSITORY_PATH:-${HOME}/workspace/fms}"
 export AGENT_ANALYSIS_TTL="${AGENT_ANALYSIS_TTL:-24h}"
 export AGENT_API_BIND_ADDRESS="${AGENT_API_BIND_ADDRESS:-127.0.0.1}"
+export AGENT_NEWMAN_WORKSPACE_ROOT="${AGENT_NEWMAN_WORKSPACE_ROOT:-${PROJECT_ROOT}/.agent/runtime}"
 
 if [[ -z "${BITBUCKET_TOKEN:-}" ]]; then
   read -r -s "BITBUCKET_TOKEN?Bitbucket access token: "
@@ -80,6 +81,9 @@ if [[ -z "${LITELLM_API_KEY:-}" ]]; then
 fi
 [[ -n "${LITELLM_API_KEY}" ]] || { echo "LiteLLM API key is required." >&2; exit 1; }
 export LITELLM_API_KEY
+
+# The OpenAI-compatible SDK reads this conventional variable before provider-specific settings.
+export OPENAI_API_KEY="${LITELLM_API_KEY}"
 
 if [[ -z "${LITELLM_MODEL:-}" ]]; then
   read -r "LITELLM_MODEL?LiteLLM model [chatgpt-5.6-luna]: "

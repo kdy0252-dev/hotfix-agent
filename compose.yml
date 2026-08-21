@@ -1,0 +1,29 @@
+services:
+  my-agent:
+    build:
+      context: .
+    env_file:
+      - .env.local
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'export OPENAI_API_KEY="$${LITELLM_API_KEY}"; exec java -jar /opt/my-agent/app.jar'
+    environment:
+      AGENT_API_BIND_ADDRESS: 0.0.0.0
+      AGENT_FMS_REPOSITORY_PATH: /workspace/fms
+      AGENT_MODE: DRAFT_PR
+      AGENT_STATE_PATH: /opt/my-agent/.agent/runtime
+      AGENT_NEWMAN_WORKSPACE_ROOT: "${AGENT_NEWMAN_WORKSPACE_ROOT:-${PWD}/.agent/runtime}"
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - "${AGENT_FMS_REPOSITORY_PATH:-../fms}:/workspace/fms"
+      - ./.agent/runtime:/opt/my-agent/.agent/runtime
+      - "${AGENT_NEWMAN_WORKSPACE_ROOT:-${PWD}/.agent/runtime}:${AGENT_NEWMAN_WORKSPACE_ROOT:-${PWD}/.agent/runtime}"
+      - fms-gradle-cache:/root/.gradle
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: "no"
+
+volumes:
+  fms-gradle-cache:
