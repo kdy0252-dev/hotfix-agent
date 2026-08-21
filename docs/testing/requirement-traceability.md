@@ -17,8 +17,20 @@
 | `SRS-STA-001~005` | schema version JSON, 임시 파일 + atomic move, 재요청 복구 | persistence 및 service idempotency tests |
 | `SRS-NL-001~014` | 폐쇄 intent, 2단계 확인, hash/version/TTL, 기존 typed gateway 재사용 | 자연어 controller/service/module adapter tests와 AI mock |
 | `SRS-NFR-SEC-*` | redaction, loopback, AI prompt/completion observation 비활성화 | redactor 및 application configuration tests |
-| `SRS-NFR-PER-*` | 응답/LLM 입력 budget, 중요도 순 prompt 구성 | evidence boundary와 `LlmPromptBudgetTest` |
+| `SRS-NFR-PER-*` | 역할별 입출력 budget, FIRE_ONCE action, provider retry와 token metric | evidence boundary, `LlmPromptBudgetTest`, `AgentCapabilityArchTest`, configuration tests |
 | `SRS-NFR-MNT-*` | port 경계, capability 최대 5, 부모-자식 소유권, Vavr Try | 전체 `*ArchTest` |
 
-기본 회귀 명령은 `./gradlew clean check :app:aiMockTest`다. 외부 LLM과 로컬 Langfuse까지 포함한
-평가는 Docker 실행 후 `./gradlew aiTest`로 분리한다.
+기본 회귀 명령은 `./gradlew check :app:aiMockTest`다. 외부 LLM과 로컬 Langfuse까지 포함한 평가는
+Docker 실행 후 `./gradlew aiTest`로 분리한다.
+
+## 실환경 E2E 기준선
+
+| 기준일 | 입력 | 결과 |
+| --- | --- | --- |
+| 2026-08-21 | FMS PR #1292 Jenkins 실패 | hotfix commit `d57a84a470878933ef23f370a01b034052394653` |
+| 2026-08-21 | `JENKINS_PR_PARITY` | Gradle, JaCoCo, Jib, Compose health 네 stage 성공 |
+| 2026-08-21 | Newman | bootstrap과 본 collection 20/20 성공: admin 11, driving 9 |
+| 2026-08-21 | Bitbucket | reviewer 없는 Draft PR #1295 생성 |
+| 2026-08-21 | Jenkins PR job | PR-1295 #1 시작 확인, 최종 결과 미확정 |
+
+이 표는 운영 credential을 사용하는 수동 shadow 기록이며 기본 자동 테스트 통과를 대신하지 않는다.

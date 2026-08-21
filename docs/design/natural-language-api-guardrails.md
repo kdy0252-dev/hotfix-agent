@@ -31,15 +31,15 @@ candidate ID와 analysis version이 없으므로 `NEEDS_CLARIFICATION`이다.
 
 | Intent | 해석 단계 권한 | 확인 후 위임 | 추가 가드 |
 | --- | --- | --- | --- |
-| `ANALYZE_JENKINS` | state write만 | Jenkins analysis use case | 실패 build/source revision 검증 |
-| `ANALYZE_OBSERVABILITY` | state write만 | Observability analysis use case | 명시적 범위·환경, `EU_APP` 고정 |
-| `LIST_CANDIDATES` | state write만 | candidate query use case | analysis ID 필수 |
-| `SELECT_CANDIDATE` | state write만 | selection use case | analysis ID/version, candidate ID 필수 |
-| `GET_HOTFIX_STATUS` | state write만 | hotfix query use case | hotfix ID 필수 |
-| `REFRESH_CI_STATUS` | state write만 | CI refresh use case | polling/trigger 금지 |
+| `ANALYZE_JENKINS` | 외부 I/O 없음 | Jenkins analysis use case | 실패 build/source revision 검증 |
+| `ANALYZE_OBSERVABILITY` | 외부 I/O 없음 | Observability analysis use case | 명시적 범위·환경, `EU_APP` 고정 |
+| `LIST_CANDIDATES` | 외부 I/O 없음 | candidate query use case | analysis ID 필수 |
+| `SELECT_CANDIDATE` | 외부 I/O 없음 | selection use case | analysis ID/version, candidate ID 필수 |
+| `GET_HOTFIX_STATUS` | 외부 I/O 없음 | hotfix query use case | hotfix ID 필수 |
+| `REFRESH_CI_STATUS` | 외부 I/O 없음 | CI refresh use case | polling/trigger 금지 |
 
-`NaturalLanguageCommandAgent`의 직접 capability는 skill 2개와 `TOOL-STATE` 하나다. 기존 external tool은
-할당하지 않는다. 확인 후 실행은 agent가 아니라 deterministic application service가 수행한다.
+`NaturalLanguageCommandAgent`의 직접 capability는 skill 2개, tool 0개다. interpretation 저장과 확인 후
+실행은 agent가 아니라 deterministic application service가 수행한다.
 
 ## 4. 데이터 모델
 
@@ -52,19 +52,19 @@ candidate ID와 analysis version이 없으므로 `NEEDS_CLARIFICATION`이다.
 
 ### 4.2 CommandInterpretation
 
-| Field | Type | 설명 |
+응답은 `metadata`와 `decision`으로 중첩된다. `POST` 생성 성공 상태는 `201 Created`다.
+
+| 경로 | Type | 설명 |
 | --- | --- | --- |
-| `interpretationId` | VO | 해석 식별자 |
-| `version` | positive long | 재해석 동시성 제어 |
-| `status` | enum | `READY_FOR_CONFIRMATION`, `NEEDS_CLARIFICATION`, `REJECTED`, `EXPIRED`, `EXECUTED` |
-| `intent` | nullable enum | 지원 intent만 가능 |
-| `parameters` | tagged DTO | intent별 typed parameter |
-| `missingFields` | string array | 실행에 필요한 누락 필드 |
-| `clarificationQuestions` | string array | 값 하나만 답할 수 있는 질문 |
-| `policyPreview` | object | 고정 repository/scope/delivery와 실행 효과 |
-| `commandHash` | nullable string | 실행 가능할 때 서버가 계산한 SHA-256 |
-| `requestDigest` | string | redaction된 입력의 SHA-256 |
-| `expiresAt` | instant | 생성 후 10분 |
+| `metadata.interpretationId` | string | 해석 식별자 |
+| `metadata.version` | positive long | 재해석 동시성 제어 |
+| `metadata.request` | object | digest와 redacted preview |
+| `metadata.timing` | object | 생성·만료 시각, TTL 10분 |
+| `decision.status` | enum | `READY_FOR_CONFIRMATION`, `NEEDS_CLARIFICATION`, `REJECTED`, `EXPIRED`, `EXECUTED` |
+| `decision.command` | nullable object | 지원 intent와 tagged typed parameter |
+| `decision.feedback` | object | 누락 필드, 질문과 rejection 정보 |
+| `decision.policy` | object | 고정 repository/scope/delivery |
+| `decision.commandHash` | nullable string | 실행 가능할 때 서버가 계산한 SHA-256 |
 
 LLM output DTO와 저장 모델을 분리한다. LLM은 `CommandInterpretationDraft`만 만들고 status, hash, expiry,
 idempotency와 정책 결과는 Java validator가 계산한다.

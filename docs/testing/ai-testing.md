@@ -77,7 +77,7 @@ Langfuse 스택을 수동으로 시작하거나 종료할 수도 있다.
 ./gradlew :app:aiEvaluationTest
 ```
 
-## 실제 에이전트 구현 후 확장 기준
+## 유지·확장 기준
 
 - 각 Embabel action마다 성공, 거절 정책, 도구 실패 응답을 `FakeOperationContext`로 검증한다.
 - 평가 fixture에는 Jenkins 로그, Grafana 관측 증거, 생성된 수정 계획, 테스트 결과, Draft PR

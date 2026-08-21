@@ -2,18 +2,18 @@
 
 ## 1. 목적
 
-이 문서는 어떤 API 요청과 상태에서 에이전트·서브에이전트·외부 write가 실행되는지 정의한다.
+이 문서는 어떤 API 요청과 상태에서 Embabel agent, 결정론적 workflow와 외부 write가 실행되는지 정의한다.
 조건은 가능한 한 Java predicate와 typed artifact로 구현하고 자연어 prompt 판단에 맡기지 않는다.
 
 ## 2. 공통 진입 조건
 
-애플리케이션 시작 시 모든 capability manifest를 먼저 검사한다. agent/subagent 하나라도 직접 skill 또는
-tool이 5개를 초과하거나 자식 전용 tool을 부모가 선언하면 agent registry를 만들지 않고 시작을
-실패시킨다. 필요한 기능은 typed artifact 경계를 가진 하위 에이전트로 분리한 후에만 등록할 수 있다.
+현재 capability 제한은 `AgentCapabilityArchTest`가 검사한다. 등록된 네 agent 각각의 skill/tool이
+5개를 넘으면 `check`가 실패한다. runtime startup validator는 별도로 두지 않는다. 현재 모든 agent의
+external tool 수는 0개다.
 
 | Condition | 통과 조건 | 실패 처리 | SRS |
 | --- | --- | --- | --- |
-| Capability budget | agent별 skill ≤ 5, tool ≤ 5, tool ownership 유효 | startup/architecture test 실패 | `SRS-NFR-MNT-006~009` |
+| Capability budget | agent별 skill ≤ 5, tool ≤ 5 | architecture test 실패 | `SRS-NFR-MNT-006~009` |
 | API trigger | 지원 endpoint에 대한 명시적 요청 | 실행 안 함 | `SRS-API-006` |
 | Idempotency | key 존재, 기존 body hash와 일치 | `400` 또는 `409` | `SRS-API-001~003` |
 | Request schema | 필수값과 discriminator 유효, unknown field 없음 | `400` | `SRS-API-004` |
@@ -24,7 +24,7 @@ tool이 5개를 초과하거나 자식 전용 tool을 부모가 선언하면 age
 
 ```text
 text length <= 2,000
-  -> NaturalLanguageCommandAgent (tool access: state only)
+  -> NaturalLanguageCommandAgent (external tool access: none)
   -> intent allowlist + typed schema validation
   -> READY_FOR_CONFIRMATION | NEEDS_CLARIFICATION | REJECTED
 ```
@@ -57,8 +57,8 @@ JenkinsAnalysisRequest
   -> BuildEvidence
 ```
 
-성공 build는 `422`, revision 불일치는 `409`다. console 전체가 아니라 parser가 추출한 최대 200개
-관련 줄만 triage 입력이 된다.
+성공 build는 `422`, revision 불일치는 `409`다. console 전체가 아니라 adapter가 크기를 제한하고
+redaction한 실패 문맥만 agent 입력이 된다.
 
 ### 3.2 Observability 경로
 
@@ -81,9 +81,9 @@ namespace 또는 query를 변경할 수 없다.
 | Action | 실행 조건 | 생략 조건 |
 | --- | --- | --- |
 | metric 조회 | 관측 분석 trigger | Jenkins 분석 |
-| trace 검색 | 5xx/latency 신호 또는 trace 연계 log 존재 | JVM/infra-only 신호 |
+| trace 검색 | 관측 분석 trigger와 allowlist template | trace 결과 없음 |
 | trace 상세 | score 상위 trace가 존재 | trace 후보 없음 |
-| Loki 조회 | 오류/trace ID 또는 log template이 계획에 포함 | metric만으로 human-only 판정 가능 |
+| Loki 조회 | 관측 분석 trigger와 allowlist template | 결과 없음 |
 | source 검색 | stack frame, test, compiler 위치 또는 code symbol 존재 | source hint 전혀 없음 |
 | root cause 생성 | 최소 한 개의 provenance 포함 evidence 존재 | evidence 없음 |
 
@@ -112,7 +112,7 @@ namespace 또는 query를 변경할 수 없다.
 6. source commit을 재조회한 결과가 분석 시점과 같음
 7. 동일 selection의 hotfix가 없거나 기존 hotfix로 복구 가능
 
-하나라도 실패하면 patch agent의 입력 artifact를 만들지 않는다. 관련 요구사항:
+하나라도 실패하면 `PatchAuthorAgent`의 입력 artifact를 만들지 않는다. 관련 요구사항:
 `SRS-SEL-001~006`, `SRS-SRC-006~007`, `SRS-STA-004~005`.
 
 ## 7. Patch 및 외부 write 게이트

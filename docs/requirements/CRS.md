@@ -6,9 +6,9 @@
 | --- | --- |
 | 문서명 | Customer Requirements Specification (CRS) |
 | 시스템명 | Embabel 기반 FMS 핫픽스 에이전트 |
-| 버전 | 1.1 |
-| 상태 | Draft |
-| 작성일 | 2026-08-20 |
+| 버전 | 1.2 |
+| 상태 | 구현 기준선 |
+| 기준일 | 2026-08-21 |
 | 대상 저장소 | `autocrypt/fms` |
 | 운영 담당 | BE팀 |
 
@@ -120,7 +120,7 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 | CRS-FUN-013 | PR 번호를 기준으로 선택하면 기존 open PR의 source commit에서 hotfix branch를 만들고 기존 PR source branch를 Draft PR 대상으로 사용해야 한다. |
 | CRS-FUN-014 | 시스템은 기존 branch 또는 PR source branch에 직접 push하지 않아야 한다. |
 | CRS-FUN-015 | 생성 branch 이름은 `agent/hotfix/*` 형식이어야 한다. |
-| CRS-FUN-016 | 시스템은 수정된 동일 commit에 대해 Jenkins PR pipeline의 배포 제외 전 검증 단계와 동등한 로컬 검증을 모두 통과한 경우에만 Bitbucket Draft PR을 생성해야 한다. |
+| CRS-FUN-016 | 시스템은 수정된 동일 commit에 대해 Jenkins PR pipeline의 배포 제외 전 검증 단계와 동등한 Gradle, JaCoCo, Jib, Compose health와 Newman 검증을 모두 통과한 경우에만 Bitbucket Draft PR을 생성해야 한다. |
 | CRS-FUN-017 | Draft PR에는 분석 근거, source, 변경 범위, 테스트 결과, 운영 담당 `BE팀`과 사람 검토 필요 문구가 포함되어야 한다. |
 | CRS-FUN-018 | 시스템은 PR reviewer를 자동 지정하지 않아야 한다. |
 | CRS-FUN-019 | 시스템은 명시적인 CI 상태 확인 요청이 있을 때만 Jenkins PR build 상태를 갱신해야 한다. |
@@ -179,7 +179,7 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 | CRS-ACC-002 | 실패 Jenkins build와 유효한 branch를 분석한다. | 코드 변경 없이 버그 후보 목록이 생성된다. |
 | CRS-ACC-003 | 30분 범위와 `PROD`를 지정하여 관측 분석한다. | 지정 범위 내 `fms-eu-prod`의 `eu-app` 증거만 후보 생성에 사용된다. |
 | CRS-ACC-004 | 후보를 선택하지 않는다. | worktree, hotfix branch와 PR이 생성되지 않는다. |
-| CRS-ACC-005 | 유효한 후보와 최신 분석 버전을 선택한다. | 수정 commit에 대한 Jenkins 동등 검증이 전부 성공한 후에만 Draft PR이 생성된다. |
+| CRS-ACC-005 | 유효한 후보와 최신 분석 버전을 선택한다. | 수정 commit의 Gradle, JaCoCo, Jib, Compose health와 Newman 검증이 전부 성공한 후에만 Draft PR이 생성된다. |
 | CRS-ACC-006 | 분석 후 기준 branch commit을 변경하고 기존 후보를 선택한다. | 선택이 거절되고 재분석을 요구한다. |
 | CRS-ACC-007 | 금지 파일 또는 변경 한도 초과 patch를 제안한다. | 변경과 PR 생성이 차단되고 사람 검토 결과가 반환된다. |
 | CRS-ACC-008 | 동일 idempotency key로 분석과 선택을 반복한다. | 기존 analysis/hotfix 결과를 반환하고 중복 PR을 만들지 않는다. |
@@ -196,5 +196,7 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 2. Grafana Loki, Tempo, Prometheus datasource UID
 3. `DEV`, `QA`, `PROD` namespace와 `eu-app`의 공통 `service_name` label mapping
 
-첫 shadow test에 사용할 Jenkins build 또는 관측 시간 범위/환경 fixture만 구현 단계에서 선정한다.
-운영 연결점 확인은 자동 변경 권한이나 본 문서의 안전 기준을 완화하지 않는다.
+2026-08-21에 실제 Jenkins 실패 사례 FMS PR #1292를 shadow fixture로 사용했다. 생성된 hotfix commit
+`d57a84a470878933ef23f370a01b034052394653`은 네 parity stage와 Newman 20/20을 통과했고 reviewer
+없는 Bitbucket Draft PR #1295로 발행됐다. PR Jenkins build가 시작된 것까지 확인했으며 최종 SUCCESS는
+이 기준선에서 확정하지 않는다. 이 확인은 자동 변경 권한이나 본 문서의 안전 기준을 완화하지 않는다.

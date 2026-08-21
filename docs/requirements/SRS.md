@@ -6,9 +6,9 @@
 | --- | --- |
 | 문서명 | Software Requirements Specification (SRS) |
 | 시스템명 | Embabel 기반 FMS 핫픽스 에이전트 |
-| 버전 | 1.1 |
-| 상태 | Draft |
-| 작성일 | 2026-08-20 |
+| 버전 | 1.2 |
+| 상태 | 구현 기준선 |
+| 기준일 | 2026-08-21 |
 | 상위 요구사항 | [CRS](CRS.md) |
 | 설계 근거 | [운영 장애 핫픽스 에이전트 설계](../design/observability-hotfix-agent.md) |
 | API 설계 | [Hotfix Agent API](../api/hotfix-agent-api.md) |
@@ -40,8 +40,9 @@ Spring Boot와 Embabel로 실행되며, API 요청으로 전달된 Jenkins 실�
 | 구성 요소 | 책임 |
 | --- | --- |
 | Hotfix API | 분석 요청, 후보 조회, 선택, hotfix 상태와 CI refresh API 제공 |
-| Analysis Agent | Embabel action을 사용한 증거 수집과 후보 생성 |
-| Hotfix Agent | 선택된 후보의 patch 제안, 정책 검사, 검증과 PR 생성 |
+| Incident Analysis Agent | Embabel action으로 제한된 증거와 source context에서 후보 생성 |
+| Patch Author/Review Agent | 선택된 후보의 patch 제안과 독립 검토 |
+| Hotfix Workflow | 정책 검사, worktree, parity 검증과 Draft PR을 결정론적으로 조율 |
 | Jenkins Adapter | build metadata, console, test report와 PR CI 상태 조회 |
 | Grafana Proxy Adapter | Loki, Tempo, Prometheus 읽기 API 호출 |
 | Bitbucket Adapter | source 확인, hotfix branch push, Draft PR 생성/조회 |
@@ -114,8 +115,8 @@ POST /api/v1/analyses/observability
 
 ```json
 {
-  "startAt": "2026-08-20T12:50:00+09:00",
-  "endAt": "2026-08-20T13:10:00+09:00",
+  "startAt": "2026-08-21T12:50:00+09:00",
+  "endAt": "2026-08-21T13:10:00+09:00",
   "environment": "PROD",
   "source": {
     "type": "PULL_REQUEST",
@@ -289,29 +290,27 @@ POST /api/v1/analyses/{analysisId}/selections
 
 | Field | Type | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `analysisId` | string/VO | Y | 분석 식별자 |
-| `version` | long | Y | 선택 동시성 제어 |
-| `trigger` | tagged union | Y | Jenkins 또는 observability request |
-| `sourceRevision` | object | Y | repository, commit, source provenance |
-| `pullRequestDestination` | string | Y | Draft PR 대상 branch |
-| `status` | enum | Y | 분석 상태 |
-| `candidates` | array | Y | 후보 목록, 없으면 empty |
-| `createdAt` | instant | Y | 생성 시각 |
-| `expiresAt` | instant | Y | 선택 만료 시각 |
+| `identity.analysisId` | string | Y | 분석 식별자 |
+| `identity.version` | long | Y | 선택 동시성 제어 |
+| `identity.requestHash` | string | Y | idempotency request fingerprint |
+| `snapshot.source` | tagged union | Y | branch 또는 open PR |
+| `snapshot.sourceRevision` | object | Y | commit, destination, provenance |
+| `snapshot.createdAt` | instant | Y | 생성 시각 |
+| `snapshot.expiresAt` | instant | Y | 선택 만료 시각 |
+| `result.status` | enum | Y | 분석 상태 |
+| `result.candidates` | array | Y | 후보 목록, 없으면 empty |
+| `result.failureReason` | nullable string | N | 실패 또는 사람 검토 사유 |
 
 ### 6.2 상태 값
 
 ```text
-ANALYSIS_REQUESTED -> COLLECTING -> CANDIDATES_READY
-                  -> NO_ACTIONABLE_CANDIDATE
-                  -> NEEDS_HUMAN_REVIEW
+ANALYSIS_REQUESTED -> ANALYZING -> CANDIDATES_READY
+                               -> NEEDS_HUMAN_REVIEW | FAILED
 
-CANDIDATES_READY -> SELECTED -> PATCHING -> FOCUSED_VERIFYING -> REVIEWING
-REVIEWING -> JENKINS_PARITY_VERIFYING -> DRAFT_PR_CREATED
-SELECTED | PATCHING | FOCUSED_VERIFYING | REVIEWING | JENKINS_PARITY_VERIFYING
-  -> NEEDS_HUMAN_REVIEW
+SELECTED -> PATCHING -> VERIFYING -> DRAFT_PR_CREATED
+          |            |          -> NEEDS_HUMAN_REVIEW | FAILED
 
-DRAFT_PR_CREATED -> CI_STATUS_REFRESHED -> RESOLVED
+DRAFT_PR_CREATED -> RESOLVED
 ```
 
 허용되지 않은 상태 전이는 `409 Conflict`로 거부해야 한다.
@@ -352,7 +351,7 @@ DRAFT_PR_CREATED -> CI_STATUS_REFRESHED -> RESOLVED
 - triage, reasoning, review 모델은 역할별 설정을 지원해야 한다.
 - 미설정 역할은 `LITELLM_MODEL`로 fallback해야 한다.
 - 모든 LLM 응답은 typed DTO schema를 통과해야 한다.
-- schema 실패 재요청은 1회로 제한하고 이후 사람 검토로 전환해야 한다.
+- schema 실패는 자동 재요청하지 않고 이후 사람 검토로 전환해야 한다.
 
 ## 8. 비기능 요구사항
 
@@ -383,12 +382,16 @@ DRAFT_PR_CREATED -> CI_STATUS_REFRESHED -> RESOLVED
 | SRS-NFR-PER-001 | 정상 로컬 자원 상태에서 분석 및 선택 API는 작업을 비동기로 접수하고 2초 이내 `202`를 반환해야 한다. |
 | SRS-NFR-PER-002 | 외부 query는 SRS-OBS-007~009의 결과 한도를 적용해야 한다. |
 | SRS-NFR-PER-003 | LLM 입력은 설정된 token budget을 넘지 않도록 중요도 순으로 축약해야 한다. |
+| SRS-NFR-PER-004 | 한 사고 처리의 의미상 LLM 호출은 triage 1회, 후보 분석 1회, patch 생성 최대 3회, review 1회로 제한해야 한다. |
+| SRS-NFR-PER-005 | 역할별 입력 상한은 triage 8,000, reasoning 16,000, review 8,000 token이며 typed 사고 처리의 입력 예약량 합계는 최대 80,000 token이어야 한다. 자연어 해석 경로는 별도 triage 1회로 전체 최대 88,000 token이어야 한다. |
+| SRS-NFR-PER-006 | 역할별 출력 상한을 요청에 명시하고 provider 전송과 구조화 출력 binding은 의미상 호출마다 한 번만 시도해야 한다. |
+| SRS-NFR-PER-007 | prompt와 completion 본문을 저장하지 않고 Spring AI token usage metric을 Prometheus endpoint로 제공해야 한다. |
 
 ### 8.4 유지보수성과 아키텍처
 
 | ID | 요구사항 |
 | --- | --- |
-| SRS-NFR-MNT-001 | 기능은 hotfix API, incident, Jenkins, observability, repository, verification, pull request, agent slice로 분리해야 한다. |
+| SRS-NFR-MNT-001 | 기능은 `incident`, `command`, `orchestrator`, `global` package로 분리하고 각 기능의 adapter/application/domain 경계를 유지해야 한다. |
 | SRS-NFR-MNT-002 | slice 간 연결은 inbound/outbound port를 통해야 한다. |
 | SRS-NFR-MNT-003 | 기존 architecture, Checkstyle과 test task를 통과해야 한다. |
 | SRS-NFR-MNT-004 | 외부 REST adapter는 fixture 기반 contract test를 가져야 한다. |
@@ -465,14 +468,15 @@ DRAFT_PR_CREATED -> CI_STATUS_REFRESHED -> RESOLVED
 | SAT-012 | parity 성공 후 worktree HEAD 변경 | PR publish 시도 | 기존 결과 무효화, parity 재실행 전 PR 없음 |
 | SAT-013 | agent manifest에 skill 또는 tool 6개 할당 | architecture test 실행 | 위반 agent 이름과 capability 목록을 표시하며 실패 |
 
-## 12. 구현 전 확인 상태
+## 12. 구현 및 실환경 확인 상태
 
 | ID | 항목 | 완료 조건 |
 | --- | --- | --- |
 | TBD-001 | Grafana read-only token | 완료: datasource 및 query API GET 성공 |
 | TBD-002 | Loki datasource UID | 완료: `P8E80F9AEF21F6940` |
 | TBD-003 | 환경별 `eu-app` label mapping | 완료: namespace와 `service_name` 공통 매핑 확인 |
-| TBD-004 | Shadow fixture | Jenkins 실패 또는 관측 시간 범위/환경 사례 선정 |
+| TBD-004 | Shadow fixture | 완료: FMS PR #1292 → parity/Newman 통과 → Draft PR #1295 |
 
-Shadow fixture가 선정되기 전에는 end-to-end shadow test를 완료한 것으로 간주하지 않는다. 단위 및
-contract test는 fixture를 사용하여 먼저 구현할 수 있다.
+2026-08-21 shadow 검증에서 hotfix commit `d57a84a470878933ef23f370a01b034052394653`의 네 parity
+stage와 Newman 20/20 성공, reviewer 없는 Draft PR 생성을 확인했다. PR #1295 Jenkins build는 시작
+상태까지 확인했으며 최종 SUCCESS는 별도 CI refresh로 확인해야 한다.
