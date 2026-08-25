@@ -170,6 +170,27 @@ class DashboardControllerTest {
     }
 
     @Test
+    void filtersUnifiedWorkflowsByPullRequestBranchOnTheServer() throws Exception {
+        var mainWorkflow = workflowWithCandidate("main", "main");
+        var pullRequestWorkflow = workflowWithCandidate(
+            "PR-1301",
+            "feature/compile-failure-test"
+        );
+        when(dashboardUseCase.getWorkflowItems())
+            .thenReturn(List.of(mainWorkflow, pullRequestWorkflow));
+
+        mockMvc.perform(get("/ui/fragments/workflows")
+                .param("branch", "feature/compile-failure-test"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("dashboard/fragments/workflows"))
+            .andExpect(model().attribute("workflows", List.of(pullRequestWorkflow)))
+            .andExpect(model().attribute(
+                "selectedWorkflowBranch",
+                "feature/compile-failure-test"
+            ));
+    }
+
+    @Test
     void rendersOnlyOneWorkflowCardForTargetedPolling() throws Exception {
         when(dashboardUseCase.getWorkflowItems()).thenReturn(List.of());
 
@@ -505,6 +526,13 @@ class DashboardControllerTest {
     }
 
     private DashboardView.WorkflowItem workflowWithCandidate() {
+        return workflowWithCandidate("PR-1301", "feature/compile-failure-test");
+    }
+
+    private DashboardView.WorkflowItem workflowWithCandidate(
+        String reference,
+        String branch
+    ) {
         var candidate = new DashboardView.Candidate(
             "candidate-1",
             "Missing class",
@@ -525,8 +553,8 @@ class DashboardControllerTest {
                 ),
                 new DashboardView.AnalysisSource(
                     "PULL_REQUEST",
-                    "PR-1301",
-                    "feature/compile-failure-test",
+                    reference,
+                    branch,
                     "abcdef0123456789"
                 ),
                 Instant.parse("2026-08-24T00:01:00Z")

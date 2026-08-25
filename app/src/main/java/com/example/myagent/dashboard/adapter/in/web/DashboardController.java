@@ -104,8 +104,11 @@ public class DashboardController {
     }
 
     @GetMapping("/ui/fragments/workflows")
-    public String workflows(Model model) {
-        return workflowFragment(model);
+    public String workflows(
+        @RequestParam(required = false) String branch,
+        Model model
+    ) {
+        return workflowFragment(branch, model);
     }
 
     @GetMapping("/ui/fragments/workflows/{analysisId}")
@@ -265,13 +268,23 @@ public class DashboardController {
     }
 
     private String workflowFragment(Model model) {
-        var workflows = dashboardUseCase.getWorkflowItems();
+        return workflowFragment(null, model);
+    }
+
+    private String workflowFragment(String branch, Model model) {
+        var allWorkflows = dashboardUseCase.getWorkflowItems();
+        var workflows = branch == null || branch.isBlank()
+            ? allWorkflows
+            : allWorkflows.stream()
+                .filter(item -> branch.equals(item.storedAnalysis().source().branch()))
+                .toList();
         model.addAttribute("workflows", workflows);
-        model.addAttribute("workflowBranches", workflows.stream()
+        model.addAttribute("workflowBranches", allWorkflows.stream()
             .map(item -> item.storedAnalysis().source().branch())
             .distinct()
             .sorted()
             .toList());
+        model.addAttribute("selectedWorkflowBranch", branch == null ? "" : branch);
         return "dashboard/fragments/workflows";
     }
 

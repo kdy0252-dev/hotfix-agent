@@ -4,11 +4,14 @@
     </div>
     <div th:if="${!#lists.isEmpty(workflows)}" class="workflow-filter-toolbar">
         <label>
-            브랜치 선택
-            <select data-workflow-filter aria-label="분석 작업 브랜치 선택">
+            PR 브랜치 선택
+            <select name="branch" data-workflow-filter aria-label="분석 작업 PR 브랜치 선택"
+                    hx-get="/ui/fragments/workflows" hx-trigger="change"
+                    hx-target="#workflow-list" hx-swap="outerHTML">
                 <option value="">전체 브랜치</option>
                 <option th:each="branch : ${workflowBranches}"
-                        th:value="${branch}" th:text="${branch}">feature/example</option>
+                        th:value="${branch}" th:text="${branch}"
+                        th:selected="${branch == selectedWorkflowBranch}">feature/example</option>
             </select>
         </label>
         <span data-workflow-filter-count th:text="|${#lists.size(workflows)}개 작업|">
