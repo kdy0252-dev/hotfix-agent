@@ -19,4 +19,21 @@ public interface PatchWorkspacePort {
     Either<IncidentFailure, Workspace> refresh(Workspace workspace);
 
     Either<IncidentFailure, String> currentHead(Workspace workspace);
+
+    Either<IncidentFailure, ReviewBranch> publishForHumanReview(
+        AnalysisSession analysis,
+        BugCandidate candidate,
+        String hotfixId,
+        String branchName
+    );
+
+    Either<IncidentFailure, AppliedPatch> reloadHumanChanges(
+        AnalysisSession analysis,
+        BugCandidate candidate,
+        String hotfixId,
+        String branchName
+    );
+
+    record ReviewBranch(String name, String url, String commit) {
+    }
 }

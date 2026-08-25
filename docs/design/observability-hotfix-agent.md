@@ -94,7 +94,9 @@ metadata, console과 test report만 GET하고 성공 build, 미완료 build와 r
 
 ### 5.2 Grafana
 
-입력은 `startAt`, `endAt`, `environment`, source다. 범위는 최대 60분이고 환경은 `DEV`, `QA`,
+입력은 `startAt`, `endAt`, `environment`, source다. 범위는 최대 31일이고 환경은 `DEV`, `QA`,
+Tempo의 단일 검색 제한인 7일을 넘으면 서버가 최근 구간부터 7일 단위로 나누어 조회한 뒤
+Trace ID를 중복 제거하여 합친다.
 `PROD`다. server가 다음 scope를 고정한다.
 
 ```text
@@ -188,13 +190,13 @@ Jenkinsfile path/hash, profile version과 각 exit code를 저장한다. parity 
 | `PatchWorkspacePort` | `LocalGitPatchWorkspaceAdapter` | worktree, patch, diff, commit, push |
 | `VerificationPort` | `LocalJenkinsParityVerificationAdapter` | focused/parity/Jib/Compose/Newman |
 | `PullRequestPort` | `BitbucketDraftPullRequestAdapter` | Draft PR create/read-back |
-| `IncidentStatePort` | `JsonIncidentStatePersistenceAdapter` | schema-versioned atomic JSON |
+| `IncidentStatePort` | `JpaIncidentStatePersistenceAdapter` | PostgreSQL agent state |
 
 application adapter 전체 목록과 권한은 [툴 카탈로그](../capabilities/tools.md)를 따른다.
 
 ## 9. 상태와 idempotency
 
-상태는 `.agent/runtime`에 schema version이 있는 JSON으로 저장하고 임시 파일 후 atomic move한다.
+상태는 Langfuse PostgreSQL과 같은 인스턴스의 분리된 `hotfix_agent` 스키마에 관계형으로 저장한다.
 secret과 원본 운영 evidence는 저장하지 않는다. 동일 endpoint/key/body는 기존 resource를 반환하고 같은
 key의 다른 body는 `409`다. 외부 write 전에는 branch/PR과 source를 다시 조회한다.
 
@@ -218,7 +220,7 @@ prompt/completion 본문 logging은 비활성화하고 token usage만 Prometheus
 ## 11. Docker 실행 경계
 
 - host FMS 저장소를 container `/workspace/fms`에 mount
-- container runtime state `/opt/my-agent/.agent/runtime`
+- container worktree/verification state `/opt/my-agent/.agent/runtime`
 - Docker socket mount로 parity container 실행
 - Testcontainers host override `host.docker.internal`
 - `AGENT_NEWMAN_WORKSPACE_ROOT`로 host `.agent/runtime` 절대 경로 전달
@@ -253,10 +255,10 @@ AI 평가는 해석과 후보/patch/review 품질을 측정하지만 write 권�
 - merge, approve, tag, release, deploy와 rollback
 - Grafana dashboard/alert rule/contact point write
 - Kubernetes resource 변경과 Pod 재시작
-- DB migration, 운영 데이터와 secret 변경
+- FMS DB migration, 운영 데이터와 secret 변경
 - Slack/Jira 자동 통지
 - 자유 형식 shell, HTTP와 observability query 실행
 - 여러 로컬 인스턴스의 분산 lock
 
-DB migration은 없다. runtime JSON은 개발 중 schema가 호환되지 않을 때 사용자가 백업 후 초기화할 수
-있지만, 애플리케이션이 FMS 저장소나 운영 데이터를 초기화하지 않는다.
+agent 전용 Liquibase migration은 `hotfix_agent` 스키마에만 적용한다. Langfuse `public` 스키마, FMS
+저장소와 운영 데이터는 변경하거나 초기화하지 않는다.

@@ -3,8 +3,8 @@
 ## 1. 실행 구조
 
 애플리케이션은 Spring Boot 4.1, Java 25, Embabel 1.5 계열과 hexagonal architecture를 사용한다.
-기능은 `incident`와 `command` vertical slice로 나뉘며 slice 간 호출은 `orchestrator`의 명시적 gateway와
-inbound port를 통한다.
+기능은 `incident`, `command`, `dashboard` vertical slice로 나뉘며 slice 간 호출은 `orchestrator`의
+명시적 gateway와 inbound port를 통한다.
 
 ```text
 HTTP controller
@@ -13,7 +13,7 @@ HTTP controller
       → Embabel AI adapter       (추론만)
       → HTTP adapter             (Jenkins/Grafana/Bitbucket)
       → workflow adapter         (Git/Gradle/Docker/Draft PR)
-      → JSON persistence adapter (.agent/runtime)
+      → JPA persistence adapter  (PostgreSQL hotfix_agent schema)
 ```
 
 ## 2. package 경계
@@ -30,6 +30,10 @@ com/example/myagent/
 ├── command/
 │   ├── adapter/in/web
 │   ├── adapter/out/{ai,module,persistence}
+│   └── application/{domain,port}
+├── dashboard/
+│   ├── adapter/in/web
+│   ├── adapter/out/module
 │   └── application/{domain,port}
 ├── orchestrator/
 └── global/{adapter,annotation,configuration,support}/
@@ -82,21 +86,41 @@ interpretation의 version과 command hash를 사용자가 실행 API로 다시 �
 
 ## 6. 상태와 실행
 
-- analysis, hotfix, interpretation과 execution은 `.agent/runtime` JSON에 저장한다.
-- 임시 파일 작성 후 atomic move하며 secret과 원본 evidence는 저장하지 않는다.
+- analysis, hotfix, interpretation과 execution은 PostgreSQL `hotfix_agent` 스키마에 저장한다.
+- 반복 값은 순서 컬럼을 가진 자식 테이블로 정규화하며 secret과 원본 evidence는 저장하지 않는다.
 - POST 요청만 background task를 제출한다. scheduler와 자동 polling은 없다.
 - 동일 idempotency key/body는 기존 resource를 반환한다.
 - 재시작 후 미완료 analysis 또는 `SELECTED` hotfix는 같은 요청으로 재개할 수 있다.
 - 외부 write 전 source freshness, 기존 branch/PR과 commit을 재확인한다.
 
-## 7. Docker 경계
+## 7. 운영 UI 경계
+
+`dashboard` slice는 Thymeleaf와 HTMX로 SSR fragment를 제공한다. 이 slice는 `incident`나 `command`의
+구현 package를 직접 참조하지 않고 `orchestrator` named gateway를 구현한 module adapter만 호출한다.
+자연어 입력은 기존 해석·확인 use case로, 후보 버튼은 기존 selection use case로 전달하므로 UI가
+안전 게이트를 복제하거나 우회하지 않는다.
+
+- 실패 PR: 최초 `load`와 사용자 새로고침만 Jenkins/Bitbucket을 조회한다.
+- 관측 신호: 사용자가 환경과 시간 범위를 제출할 때만 Grafana를 조회한다.
+- 진행 상태: 분석과 연결된 hotfix를 `analysisId`로 결합해 하나의 네 단계 작업 카드로 표시한다.
+  2초마다 agent DB 상태만 읽으며 Jenkins/Grafana polling은 수행하지 않는다.
+- 다중 원인: `candidateId`마다 독립 hotfix를 유지하고 재시작 시 새 hotfix ID와 격리 branch를 사용한다.
+- 작업 제어: 취소 신호를 background registry와 workflow gate에 전달한 뒤 로컬 상태를 삭제한다. 이미
+  생성된 Bitbucket PR이나 Jenkins 기록은 자동 삭제하지 않는다.
+- 외부 링크: Bitbucket, Jenkins와 Grafana 원본 화면을 새 탭으로 연다.
+
+## 8. Docker 경계
 
 `compose.yml`은 FMS 저장소를 `/workspace/fms`, runtime을 `/opt/my-agent/.agent/runtime`에 연결한다.
 Newman과 nested Docker Compose는 macOS Docker daemon이 해석할 수 있도록 같은 runtime을 호스트 절대
 경로에도 mount한다. `AGENT_NEWMAN_WORKSPACE_ROOT`가 그 경로를 지정하고 Testcontainers는
 `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`을 사용한다.
 
-## 8. 자동 검증
+`./gradlew runWithLangfuse`는 백엔드와 Langfuse를 같은 Compose 프로젝트에 기동한다. PostgreSQL 인스턴스는
+공유하지만 Langfuse는 `public`, agent 상태와 Liquibase 메타데이터는 `hotfix_agent` 스키마를 사용한다.
+`agent-schema-init` one-shot 서비스가 스키마를 보장한 뒤 백엔드가 시작된다.
+
+## 9. 자동 검증
 
 `./gradlew check :app:aiMockTest`가 다음을 검사한다.
 

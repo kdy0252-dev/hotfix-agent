@@ -7,7 +7,9 @@ tasks.register("buildAll") {
 }
 
 val langfuseComposeFile = layout.projectDirectory.file("infra/langfuse/compose.yml")
-val langfuseEnvironmentFile = layout.buildDirectory.file("ai-test/langfuse.env")
+val langfuseEnvironmentFile = layout.projectDirectory.file(".agent/runtime/langfuse.env")
+val dockerExecutable = providers.environmentVariable("DOCKER_EXECUTABLE")
+    .orElse("/usr/local/bin/docker")
 
 val prepareLangfuseEnvironment = tasks.register<Exec>("prepareLangfuseEnvironment") {
     group = "verification"
@@ -15,7 +17,7 @@ val prepareLangfuseEnvironment = tasks.register<Exec>("prepareLangfuseEnvironmen
     commandLine(
         "zsh",
         layout.projectDirectory.file("scripts/ai-test/prepare-langfuse-env.zsh").asFile,
-        langfuseEnvironmentFile.get().asFile,
+        langfuseEnvironmentFile.asFile,
     )
     outputs.file(langfuseEnvironmentFile)
 }
@@ -23,12 +25,13 @@ val prepareLangfuseEnvironment = tasks.register<Exec>("prepareLangfuseEnvironmen
 val langfuseUp = tasks.register<Exec>("langfuseUp") {
     group = "verification"
     description = "Starts the local Langfuse v4 stack used by AI evaluations."
+    environment("COMPOSE_IGNORE_ORPHANS", "true")
     dependsOn(prepareLangfuseEnvironment)
     mustRunAfter(":app:compileAiEvaluationTestJava", ":app:aiMockTest")
     commandLine(
-        "docker", "compose",
+        dockerExecutable.get(), "compose",
         "--project-name", "my-agent-ai-test",
-        "--env-file", langfuseEnvironmentFile.get().asFile,
+        "--env-file", langfuseEnvironmentFile.asFile,
         "--file", langfuseComposeFile.asFile,
         "up", "--detach", "--wait", "--wait-timeout", "240",
     )
@@ -42,7 +45,7 @@ val langfuseReady = tasks.register<Exec>("langfuseReady") {
         "zsh",
         layout.projectDirectory.file("scripts/ai-test/wait-for-langfuse.zsh").asFile,
         "http://127.0.0.1:13000",
-        langfuseEnvironmentFile.get().asFile,
+        langfuseEnvironmentFile.asFile,
     )
 }
 
@@ -50,13 +53,39 @@ tasks.register<Exec>("langfuseDown") {
     group = "verification"
     description = "Stops the local Langfuse test stack and removes its volumes."
     commandLine(
-        "docker", "compose",
+        dockerExecutable.get(), "compose",
         "--project-name", "my-agent-ai-test",
-        "--env-file", langfuseEnvironmentFile.get().asFile,
+        "--env-file", langfuseEnvironmentFile.asFile,
         "--file", langfuseComposeFile.asFile,
         "down", "--volumes", "--remove-orphans",
     )
     dependsOn(prepareLangfuseEnvironment)
+}
+
+tasks.register<Exec>("langfuseStop") {
+    group = "application"
+    description = "Stops the app and local Langfuse stack without deleting evaluation data."
+    commandLine(
+        dockerExecutable.get(), "compose",
+        "--project-name", "my-agent-ai-test",
+        "--env-file", langfuseEnvironmentFile.asFile,
+        "--file", layout.projectDirectory.file("compose.yml").asFile,
+        "--file", langfuseComposeFile.asFile,
+        "--file", layout.projectDirectory.file("infra/langfuse/app.compose.yml").asFile,
+        "stop",
+    )
+    dependsOn(prepareLangfuseEnvironment)
+}
+
+tasks.register<Exec>("runWithLangfuse") {
+    group = "application"
+    description = "Runs the app container with local Langfuse tracing and live LLM-as-a-judge evaluation."
+    dependsOn(langfuseReady)
+    commandLine(
+        "zsh",
+        layout.projectDirectory.file("scripts/run-with-langfuse.zsh").asFile,
+        langfuseEnvironmentFile.asFile,
+    )
 }
 
 tasks.register("aiTest") {

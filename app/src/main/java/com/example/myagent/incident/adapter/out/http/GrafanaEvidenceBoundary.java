@@ -27,8 +27,36 @@ final class GrafanaEvidenceBoundary {
     }
 
     TempoSearch tempo(String response, String serviceName) {
+        JsonNode root = parse(response);
+        if (root.path("traces").isArray()) {
+            return nativeTempo(root, serviceName);
+        }
         String bounded = boundedFrames(response, serviceName, 20, 20);
-        return new TempoSearch(bounded, traceIds(bounded).stream().limit(3).toList());
+        return new TempoSearch(bounded, traceIds(bounded).stream().limit(20).toList());
+    }
+
+    private TempoSearch nativeTempo(JsonNode root, String serviceName) {
+        ArrayNode traces = array(root.path("traces"));
+        List<JsonNode> accepted = new ArrayList<>();
+        for (JsonNode trace : traces) {
+            if (accepted.size() >= 20) {
+                break;
+            }
+            if (serviceName.equals(trace.path("rootServiceName").asString())) {
+                accepted.add(trace);
+            }
+        }
+        traces.removeAll();
+        accepted.forEach(traces::add);
+        String bounded = serialize(root);
+        requireSize(bounded);
+        List<String> ids = accepted.stream()
+            .map(trace -> trace.path("traceID").asString())
+            .filter(traceId -> traceId.matches("(?i)[0-9a-f]{16,32}"))
+            .distinct()
+            .limit(20)
+            .toList();
+        return new TempoSearch(bounded, ids);
     }
 
     String details(List<String> responses) {

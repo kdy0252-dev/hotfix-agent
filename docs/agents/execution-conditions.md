@@ -66,7 +66,7 @@ redaction한 실패 문맥만 agent 입력이 된다.
 ObservabilityAnalysisRequest
   AND environment IN {DEV, QA, PROD}
   AND startAt < endAt
-  AND duration <= 60 minutes
+  AND duration <= 31 days
   AND no forbidden query/scope fields
   -> EvidencePlan(namespace, serviceName, templates, range)
 ```
@@ -162,8 +162,14 @@ Draft PR 생성만으로 `IssueResolved`를 달성하지 않는다.
 
 ## 9. 중단 및 재개 조건
 
-- 상태는 action 완료 후 atomic JSON으로 저장한다.
-- 재시작 시 미완료 상태를 읽되 외부 write 전 branch와 PR 존재 여부를 재조회한다.
+- 상태는 action 완료 후 PostgreSQL `hotfix_agent` 스키마에 transaction으로 저장한다.
+- 분석 요청 원문과 source를 관계형 컬럼에 저장한다. 재시작 시 `ANALYSIS_REQUESTED`, `ANALYZING`은
+  동일 analysis ID로 분석을 다시 제출한다.
+- 재시작 시 `SELECTED`, `PATCHING`, `VERIFYING`은 기존 로컬 프로세스를 이어 붙이지 않고, 고정 source
+  commit과 동일 hotfix ID로 전용 worktree를 재생성하여 현재 workflow를 안전하게 재실행한다.
+- 재실행 중 외부 write 전에는 기존 branch와 PR 존재 여부를 재조회한다.
+- `DRAFT_PR_CREATED`는 로컬 workflow를 재실행하지 않는다. Jenkins CI 상태는 사용자의 명시적 refresh
+  요청으로만 갱신한다.
 - 외부 API `5xx`는 마스킹된 원인과 재시도 가능 상태로 저장한다.
 - background polling과 scheduler는 구현하지 않는다.
 - 사용자의 동일 idempotency 요청은 새 작업을 만들지 않고 기존 resource를 반환한다.

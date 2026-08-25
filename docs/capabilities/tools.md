@@ -19,7 +19,7 @@ port를 순서대로 호출한다.
 | `TOOL-WORKSPACE` | `PatchWorkspacePort` / `LocalGitPatchWorkspaceAdapter` | 격리 worktree, patch, diff, commit, branch push | local/external write |
 | `TOOL-VERIFY` | `VerificationPort` / `LocalJenkinsParityVerificationAdapter` | focused test와 고정 parity profile 실행 | local process |
 | `TOOL-DRAFT-PR` | `PullRequestPort` / `BitbucketDraftPullRequestAdapter` | reviewer 없는 Draft PR 생성과 조회 | external write |
-| `TOOL-STATE` | `IncidentStatePort` / `JsonIncidentStatePersistenceAdapter` | runtime JSON read/write | local write |
+| `TOOL-STATE` | `IncidentStatePort` / `JpaIncidentStatePersistenceAdapter` | PostgreSQL `hotfix_agent` read/write | local write |
 
 위 표는 한 agent에 8개 tool을 부여한다는 뜻이 아니다. 이들은 결정론적 workflow 전체의 adapter이며
 agent 직접 할당은 0개다.
@@ -81,12 +81,13 @@ stage 누락·실패·실행 불가, unknown Jenkinsfile hash 또는 Docker/Newm
 
 ## 5. Runtime state와 Docker 경로
 
-- host 상태: `.agent/runtime`
-- container 상태: `/opt/my-agent/.agent/runtime`
+- agent 상태: PostgreSQL `hotfix_agent` 스키마
+- host 작업 경로: `.agent/runtime`
+- container 작업 경로: `/opt/my-agent/.agent/runtime`
 - FMS source mount: `/workspace/fms`
 - Testcontainers host override: `host.docker.internal`
 - Newman host workspace root: `AGENT_NEWMAN_WORKSPACE_ROOT`로 절대 경로 지정
-- schema version, 임시 파일 후 atomic move, secret 비저장을 적용
+- 상태 schema version, 관계형 자식 테이블과 secret 비저장을 적용
 
 ## 6. 단계별 권한
 

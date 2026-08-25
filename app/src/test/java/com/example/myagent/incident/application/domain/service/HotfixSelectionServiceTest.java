@@ -15,6 +15,7 @@ import com.example.myagent.incident.application.domain.model.analysis.BugCandida
 import com.example.myagent.incident.application.domain.model.analysis.SourceRevision;
 import com.example.myagent.incident.application.domain.model.analysis.SourceSpec;
 import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource;
+import com.example.myagent.incident.application.domain.service.internal.HotfixExecutionRegistry;
 import com.example.myagent.incident.application.port.in.IncidentUseCaseException;
 import com.example.myagent.incident.application.port.in.SelectCandidateUseCase.SelectionCommand;
 import com.example.myagent.incident.application.port.out.HotfixWorkflowPort;
@@ -71,7 +72,7 @@ class HotfixSelectionServiceTest {
 
         verify(sourceRevisionPort, never()).resolve(any());
         verify(statePort, never()).saveHotfix(any());
-        verify(workflowPort, never()).execute(any(), any(), any());
+        verify(workflowPort, never()).execute(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -92,7 +93,8 @@ class HotfixSelectionServiceTest {
                 Duration.ofHours(24)
             ),
             Clock.fixed(Instant.parse("2026-08-20T01:00:00Z"), ZoneOffset.UTC),
-            tasks
+            tasks,
+            new HotfixExecutionRegistry()
         );
         when(statePort.findHotfixByIdempotencyKey("selection-key"))
             .thenReturn(Either.right(Optional.empty()));
@@ -115,10 +117,10 @@ class HotfixSelectionServiceTest {
 
         assertThat(response.progress().status()).isEqualTo(HotfixResource.Status.SELECTED);
         assertThat(tasks.pending()).isEqualTo(1);
-        verify(workflowPort, never()).execute(any(), any(), any());
+        verify(workflowPort, never()).execute(any(), any(), any(), any(), any());
 
         HotfixResource completed = completed(response);
-        when(workflowPort.execute(analysis, candidate, response.identity().hotfixId()))
+        when(workflowPort.execute(any(), any(), any(), any(), any()))
             .thenReturn(Either.right(completed));
         tasks.runNext();
 
@@ -178,18 +180,25 @@ class HotfixSelectionServiceTest {
                 Duration.ofHours(24)
             ),
             Clock.fixed(Instant.parse("2026-08-20T01:00:00Z"), ZoneOffset.UTC),
-            new CapturingTaskExecutor()
+            new CapturingTaskExecutor(),
+            new HotfixExecutionRegistry()
         );
     }
 
     private HotfixResource completed(HotfixResource selected) {
         var progress = new HotfixResource.Progress(
-            HotfixResource.Status.NEEDS_HUMAN_REVIEW,
-            "agent/hotfix/example",
-            0,
-            0,
-            selected.progress().verification(),
-            "fixture completed"
+            new HotfixResource.WorkflowState(
+                HotfixResource.Status.NEEDS_HUMAN_REVIEW,
+                "agent/hotfix/example",
+                null,
+                new HotfixResource.FailureDetail(
+                    HotfixResource.WorkflowStage.CODE_REVIEW,
+                    "FIXTURE_REVIEW",
+                    "fixture completed"
+                )
+            ),
+            HotfixResource.ChangeMetrics.empty(),
+            selected.progress().verification()
         );
         return new HotfixResource(selected.identity(), progress, selected.publication());
     }

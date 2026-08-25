@@ -43,6 +43,9 @@ public class NaturalLanguageCommandAgent {
             ANALYZE_JENKINS, ANALYZE_OBSERVABILITY, LIST_CANDIDATES, SELECT_CANDIDATE,
             GET_HOTFIX_STATUS, REFRESH_CI_STATUS.
 
+            A request to analyze a failed pull request or its cause is ANALYZE_JENKINS.
+            Never emit ANALYZE_PULL_REQUEST. Use the Jenkins jobPath and buildNumber, and represent
+            the pull request as source type PULL_REQUEST with pullRequestNumber.
             Source must be exactly BRANCH with branch, or PULL_REQUEST with pullRequestNumber.
             Observability requires ISO-8601 UTC startAt/endAt, environment, and source.
             Candidate selection requires analysisId, analysisVersion, and candidateId.

@@ -1,0 +1,51 @@
+<div class="chat-workflow-reference" xmlns:th="http://www.thymeleaf.org">
+    <div class="chat-message assistant">
+        <strong th:text="|${workflow.storedAnalysis.source.reference} 분석 작업입니다.|">분석 작업</strong>
+        <span th:text="|상태: ${workflow.storedAnalysis.analysis.status} · 작업 ID: ${workflow.storedAnalysis.analysis.identity.analysisId.substring(0, 8)}|">
+            상태
+        </span>
+    </div>
+
+    <div th:if="${requestedCandidateNumber != null and selectedCandidate == null}"
+         class="chat-message assistant">
+        해당 번호의 원인 후보가 없습니다. 아래 후보 번호를 확인해 주세요.
+    </div>
+
+    <th:block>
+        <article th:each="work, candidateStat : ${displayCandidates}" class="chat-candidate">
+            <div>
+                <span class="confidence" th:text="|${work.candidate.confidencePercent}%|">90%</span>
+                <strong th:text="${selectedCandidate != null
+                    ? requestedCandidateNumber + '번 · ' + work.candidate.title
+                    : candidateStat.count + '번 · ' + work.candidate.title}">candidate</strong>
+            </div>
+            <p th:text="${work.candidate.rootCause}">root cause</p>
+            <details>
+                <summary>Details</summary>
+                <dl class="detail-list compact">
+                    <div><dt>상세 원인</dt><dd th:text="${work.candidate.rootCause}">root cause</dd></div>
+                    <div><dt>자동 수정</dt>
+                        <dd th:text="${work.candidate.selectable ? '진행 가능' : work.candidate.selectionRestriction}">
+                            진행 가능
+                        </dd>
+                    </div>
+                </dl>
+            </details>
+            <form th:if="${work.candidate.selectable and work.hotfix == null}"
+                  th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${workflow.storedAnalysis.analysis.identity.analysisId})}"
+                  hx-target="#command-result" hx-swap="innerHTML" data-chat-confirm-form>
+                <input type="hidden" name="analysisVersion"
+                       th:value="${workflow.storedAnalysis.analysis.identity.version}">
+                <input type="hidden" name="candidateId" th:value="${work.candidate.candidateId}">
+                <input type="hidden" name="idempotencyKey"
+                       th:value="|${selectionIdempotencyKey}-${work.candidate.candidateId}|">
+                <input type="hidden" name="chatMode" value="true">
+                <button type="submit" class="small-action">이 원인으로 진행</button>
+            </form>
+            <small th:if="${work.hotfix != null}" class="chat-hint"
+                   th:text="|이미 ${work.hotfix.progress.status} 상태로 진행 중입니다.|">진행 중</small>
+        </article>
+    </th:block>
+    <small th:if="${selectedCandidate != null and selectedCandidate.candidate.selectable and selectedCandidate.hotfix == null}"
+           class="chat-hint">진행 가능합니다. “응”이라고 입력하면 이 원인으로 진행합니다.</small>
+</div>

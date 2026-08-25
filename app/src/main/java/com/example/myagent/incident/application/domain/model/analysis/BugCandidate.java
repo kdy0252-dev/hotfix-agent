@@ -3,6 +3,12 @@ package com.example.myagent.incident.application.domain.model.analysis;
 import java.util.List;
 
 public record BugCandidate(Identity identity, Evidence evidence, Recommendation recommendation) {
+    public boolean automaticFixReady() {
+        return identity.eligibility() == Eligibility.ELIGIBLE
+            && !evidence.sourceLocations().isEmpty()
+            && !evidence.evidenceRefs().isEmpty();
+    }
+
     public record Identity(
         String candidateId,
         String title,

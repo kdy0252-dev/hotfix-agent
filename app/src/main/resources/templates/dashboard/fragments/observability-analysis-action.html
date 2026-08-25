@@ -1,0 +1,27 @@
+<div class="observability-analysis-action"
+     th:id="|observability-analysis-${signalKey}|"
+     th:attr="data-completed-analysis-id=${analysisWorkflowReady ? analysisId : null},
+              hx-get=${analysisCompleted ? null : analysisStatusUrl},
+              hx-trigger=${analysisCompleted ? null : 'load delay:1s, every 2s'},
+              hx-target=${analysisCompleted ? null : 'this'},
+              hx-swap=${analysisCompleted ? null : 'outerHTML'}"
+     xmlns:th="http://www.thymeleaf.org">
+    <div class="trace-analysis-state"
+         th:classappend="${analysisFailed} ? ' failed' : (${analysisCompleted} ? ' complete' : ' running')">
+        <span class="agent-pulse" aria-hidden="true"></span>
+        <div>
+            <strong th:text="${analysisFailed} ? '관측 분석 실패' : (${analysisCompleted} ? '관측 분석 완료' : 'incident-analysis-agent 분석 중')">
+                관측 분석 중
+            </strong>
+            <small th:text="${analysisFailed}
+                ? ${analysisFailureReason}
+                : (${analysisCompleted}
+                    ? '분석 작업 카드가 아래에 추가되었습니다. 후보를 선택해 Draft PR 생성을 시작하세요.'
+                    : '선택한 시간 범위의 Loki·Tempo·Prometheus·알람 증거를 분석하고 있습니다.')">
+                관측 증거를 분석하고 있습니다.
+            </small>
+        </div>
+        <button th:if="${analysisCompleted}" type="button" class="analysis-result-close"
+                data-dismiss-analysis-action aria-label="관측 분석 결과 닫기">×</button>
+    </div>
+</div>

@@ -71,10 +71,61 @@ class BitbucketSourceContextAdapterTest {
         );
     }
 
+    @Test
+    void discoversMultipleObservabilitySourceFilesAndKeepsRelevantLines() {
+        String mapperPath = "eu/booking/src/main/java/example/BookingMapper.java";
+        String servicePath = "eu/booking/src/main/java/example/BookingService.java";
+        server.createContext(
+            "/2.0/repositories/autocrypt/fms/src/abc123/eu",
+            exchange -> serveJson(exchange, """
+                {"values":[
+                  {"type":"commit_file","path":"%s"},
+                  {"type":"commit_file","path":"%s"}
+                ]}
+                """.formatted(mapperPath, servicePath))
+        );
+        server.createContext(
+            "/2.0/repositories/autocrypt/fms/src/abc123/" + mapperPath,
+            exchange -> serveText(exchange, "class BookingMapper { void map() {} }\n")
+        );
+        server.createContext(
+            "/2.0/repositories/autocrypt/fms/src/abc123/" + servicePath,
+            exchange -> serveText(exchange, "class BookingService { void start() {} }\n")
+        );
+
+        var evidence = new AnalysisEvidence.Observability(
+            "fms-eu-prod",
+            "fms-eu-prod-app",
+            "",
+            "",
+            "at example.BookingService.start(BookingService.java:42)\n"
+                + "at example.BookingMapper.map(BookingMapper.java:8)",
+            "",
+            List.of("loki:trace")
+        );
+
+        var result = adapter.read(
+            evidence,
+            new SourceRevision("abc123", "main", "bitbucket:branch:main")
+        ).get();
+
+        assertThat(result.files()).containsKeys(servicePath, mapperPath);
+        assertThat(result.files().get(mapperPath)).contains("1: class BookingMapper");
+    }
+
     private void serveSource(HttpExchange exchange) throws IOException {
+        serveText(exchange, "class BookingService {}\n");
+    }
+
+    private void serveJson(HttpExchange exchange, String value) throws IOException {
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        serveText(exchange, value);
+    }
+
+    private void serveText(HttpExchange exchange, String value) throws IOException {
         assertThat(exchange.getRequestHeaders().getFirst("Authorization"))
             .isEqualTo("Bearer test-token");
-        byte[] response = "class BookingService {}\n".getBytes(StandardCharsets.UTF_8);
+        byte[] response = value.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(200, response.length);
         try (var body = exchange.getResponseBody()) {
             body.write(response);

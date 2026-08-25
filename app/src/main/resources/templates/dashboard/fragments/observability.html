@@ -1,0 +1,103 @@
+<div id="observability-list" class="item-list" data-paginated-list
+     xmlns:th="http://www.thymeleaf.org">
+    <div class="result-meta">
+        <span th:text="|${environment} · EU APP · KST|">PROD · EU APP · KST</span>
+        <strong data-filter-count th:text="|${#lists.size(signals)} signals|">0 signals</strong>
+    </div>
+    <div th:if="${!#lists.isEmpty(signals)}" class="pagination-toolbar">
+        <label>
+            페이지당
+            <select data-page-size aria-label="페이지당 신호 개수">
+                <option value="5" selected>5개</option>
+                <option value="10">10개</option>
+            </select>
+        </label>
+        <label>
+            유형
+            <select data-signal-filter aria-label="관측 신호 유형">
+                <option value="ALL" selected>전체</option>
+                <option value="ERROR">오류</option>
+                <option value="WARNING">경고</option>
+            </select>
+        </label>
+        <span data-page-status>1 / 1 페이지</span>
+        <div class="page-actions">
+            <button type="button" class="detail-action" data-page-previous>이전</button>
+            <button type="button" class="detail-action" data-page-next>다음</button>
+        </div>
+    </div>
+    <div th:if="${#lists.isEmpty(signals)}" class="empty-state">
+        선택한 범위에서 활성 알람이나 경고·오류 trace가 발견되지 않았습니다.
+    </div>
+    <div th:each="signal, signalStat : ${signals}" class="signal-entry" data-page-item
+         th:attr="data-signal-severity=${signal.severity}">
+        <div class="signal-card">
+            <span class="signal-icon" th:classappend="${signal.type == 'ALERT'} ? ' alert' : ' trace'"
+                  th:text="${signal.type == 'ALERT'} ? 'A' : 'T'">A</span>
+            <span class="signal-content">
+                <strong th:text="${signal.title}">Signal title</strong>
+                <small th:text="${signal.summary}">Signal summary</small>
+            </span>
+            <time th:text="${signal.occurredAtKstLabel}">time</time>
+            <div class="signal-actions">
+                <button type="button" class="detail-action"
+                        th:attr="data-modal-open=|signal-detail-${signalStat.index}|">
+                    Details
+                </button>
+                <a th:href="${signal.reference.url}" target="_blank" rel="noopener noreferrer"
+                   th:text="|${signal.reference.linkLabel} ↗|">
+                    Grafana ↗
+                </a>
+                <div th:if="${signal.type == 'STACK_TRACE'}">
+                    <form class="observability-analysis-form"
+                          hx-post="/ui/analyses/observability"
+                          th:attr="hx-target=|#observability-analysis-${signal.analysisKey}|,
+                                   data-analysis-key=${signal.analysisKey}"
+                          hx-swap="outerHTML"
+                          hx-disabled-elt="button" data-agent-request="incident-analysis-agent">
+                        <input type="hidden" name="signalKey" th:value="${signal.analysisKey}">
+                        <input type="hidden" name="startAt" th:value="${signal.analysisStartAt}">
+                        <input type="hidden" name="endAt" th:value="${signal.analysisEndAt}">
+                        <input type="hidden" name="environment" th:value="${environment}">
+                        <input type="hidden" name="sourceType" value="BRANCH">
+                        <input type="hidden" name="sourceReference" value="main">
+                        <button type="submit" class="detail-action analysis-request-button">
+                            <span class="analysis-button-label">AI 분석</span>
+                            <span class="analysis-button-loading">분석 중…</span>
+                            <i aria-hidden="true"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div th:if="${signal.type == 'STACK_TRACE'}"
+             class="observability-analysis-action"
+             th:id="|observability-analysis-${signal.analysisKey}|">
+        </div>
+        <dialog class="detail-modal" th:id="|signal-detail-${signalStat.index}|">
+            <div class="detail-modal-head">
+                <div>
+                    <span class="eyebrow" th:text="${signal.type}">STACK_TRACE</span>
+                    <h3 th:text="${signal.title}">Signal title</h3>
+                </div>
+                <button type="button" class="modal-close" data-modal-close aria-label="상세 닫기">×</button>
+            </div>
+            <dl class="detail-list">
+                <div><dt>요약</dt><dd th:text="${signal.summary}">summary</dd></div>
+                <div th:if="${signal.reference.traceId != null}">
+                    <dt>Trace ID</dt><dd><code th:text="${signal.reference.traceId}">trace</code></dd>
+                </div>
+                <div><dt>기술 정보</dt><dd class="signal-technical"
+                    th:text="${signal.reference.technicalDetail}">detail</dd></div>
+                <div><dt>조회 소스</dt><dd th:text="${signal.reference.linkLabel}">Loki</dd></div>
+                <div><dt>발생 시각</dt><dd th:text="${signal.occurredAtKstLabel}">time</dd></div>
+                <div><dt>환경</dt><dd th:text="|${environment} · EU APP · KST|">PROD · EU APP · KST</dd></div>
+            </dl>
+            <a class="primary modal-link" th:href="${signal.reference.url}" target="_blank"
+               rel="noopener noreferrer"
+               th:text="|${signal.reference.linkLabel}에서 원본 보기 ↗|">
+                Grafana에서 원본 보기 ↗
+            </a>
+        </dialog>
+    </div>
+</div>

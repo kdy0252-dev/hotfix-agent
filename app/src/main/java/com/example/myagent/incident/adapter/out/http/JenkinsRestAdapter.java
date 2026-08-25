@@ -4,7 +4,11 @@ import com.example.myagent.global.configuration.JenkinsProperties;
 import com.example.myagent.global.support.SensitiveEvidenceRedactor;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisEvidence;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisRequest;
+import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource.CiPipeline;
+import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource.CiStage;
+import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource.CiTiming;
 import com.example.myagent.incident.application.port.out.IncidentFailure;
+import com.example.myagent.incident.application.port.out.JenkinsDashboardPort;
 import com.example.myagent.incident.application.port.out.JenkinsEvidencePort;
 import io.vavr.control.Either;
 import io.vavr.control.Try;
@@ -14,9 +18,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.regex.Pattern;
+import java.util.stream.StreamSupport;
 import org.jmolecules.architecture.hexagonal.Adapter;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -24,9 +32,10 @@ import tools.jackson.databind.ObjectMapper;
 
 @Adapter
 @Component
-public class JenkinsRestAdapter implements JenkinsEvidencePort {
+public class JenkinsRestAdapter implements JenkinsEvidencePort, JenkinsDashboardPort {
     private static final int MAX_LOG_LINES = 200;
     private static final int MAX_TEST_REPORT_CHARS = 100_000;
+    private static final Pattern PULL_REQUEST_JOB = Pattern.compile("PR-(\\d+)");
 
     private final JenkinsProperties properties;
     private final ObjectMapper objectMapper;
@@ -69,8 +78,53 @@ public class JenkinsRestAdapter implements JenkinsEvidencePort {
             JsonNode metadata = getJson(URI.create(stripTrailingSlash(buildUrl) + "/api/json"));
             JsonNode build = metadata.has("lastBuild") ? metadata.path("lastBuild") : metadata;
             String resolvedUrl = build.path("url").asString(buildUrl);
-            return new CiBuildSnapshot(build.path("result").asString(), resolvedUrl);
+            JsonNode pipeline = getOptionalJson(URI.create(
+                stripTrailingSlash(resolvedUrl) + "/wfapi/describe"
+            )).orElse(null);
+            String result = pipeline == null
+                ? build.path("result").asString()
+                : pipeline.path("status").asString(build.path("result").asString());
+            return new CiBuildSnapshot(
+                resolvedUrl,
+                new CiPipeline(result, pipelineStages(pipeline))
+            );
         }).toEither().mapLeft(this::failure);
+    }
+
+    @Override
+    public Either<IncidentFailure, List<FailedBuild>> findFailedPullRequestBuilds() {
+        return Try.of(this::failedPullRequestBuilds)
+            .toEither()
+            .mapLeft(this::failure);
+    }
+
+    private List<FailedBuild> failedPullRequestBuilds() throws Exception {
+        String tree = "jobs%5Bname,url,color,lastBuild%5Bnumber,result,timestamp,url%5D%5D";
+        URI uri = URI.create(stripTrailingSlash(properties.baseUrl().toString())
+            + "/job/" + properties.rootJob() + "/api/json?tree=" + tree);
+        JsonNode jobs = getJson(uri).path("jobs");
+        return jobs.isArray() ? StreamSupport.stream(jobs.spliterator(), false)
+            .map(this::failedPullRequestBuild)
+            .flatMap(Optional::stream)
+            .sorted((left, right) -> right.timestamp().compareTo(left.timestamp()))
+            .toList() : List.of();
+    }
+
+    private Optional<FailedBuild> failedPullRequestBuild(JsonNode job) {
+        var matcher = PULL_REQUEST_JOB.matcher(job.path("name").asString());
+        JsonNode lastBuild = job.path("lastBuild");
+        if (!matcher.matches() || !"FAILURE".equals(lastBuild.path("result").asString())) {
+            return Optional.empty();
+        }
+        String jobName = job.path("name").asString();
+        return Optional.of(new FailedBuild(
+            Long.parseLong(matcher.group(1)),
+            properties.rootJob() + "/job/" + jobName,
+            lastBuild.path("number").asLong(),
+            lastBuild.path("result").asString(),
+            Instant.ofEpochMilli(lastBuild.path("timestamp").asLong()),
+            lastBuild.path("url").asString(job.path("url").asString())
+        ));
     }
 
     private AnalysisEvidence.Jenkins collectEvidence(AnalysisRequest.Jenkins request) throws Exception {
@@ -161,6 +215,29 @@ public class JenkinsRestAdapter implements JenkinsEvidencePort {
 
     private JsonNode getJson(URI uri) throws Exception {
         return objectMapper.readTree(getText(uri));
+    }
+
+    private Optional<JsonNode> getOptionalJson(URI uri) throws Exception {
+        String response = getOptionalText(uri);
+        return response.isBlank() ? Optional.empty() : Optional.of(objectMapper.readTree(response));
+    }
+
+    private List<CiStage> pipelineStages(JsonNode pipeline) {
+        if (pipeline == null || !pipeline.path("stages").isArray()) {
+            return List.of();
+        }
+        return StreamSupport.stream(pipeline.path("stages").spliterator(), false)
+            .map(stage -> new CiStage(
+                stage.path("id").asString(),
+                stage.path("name").asString(),
+                stage.path("status").asString("UNKNOWN"),
+                new CiTiming(
+                    stage.path("startTimeMillis").asLong(),
+                    stage.path("durationMillis").asLong()
+                ),
+                stage.path("error").path("message").asString(null)
+            ))
+            .toList();
     }
 
     private String getOptionalText(URI uri) throws Exception {

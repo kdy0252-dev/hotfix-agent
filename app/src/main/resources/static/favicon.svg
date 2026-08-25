@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="FMS Hotfix">
+    <rect width="64" height="64" rx="16" fill="#101916"/>
+    <path d="M18 20h18a10 10 0 0 1 10 10v2" fill="none" stroke="#83e1bf" stroke-width="6"
+          stroke-linecap="round"/>
+    <path d="m39 25 8 7-8 7" fill="none" stroke="#83e1bf" stroke-width="6"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M46 44H28a10 10 0 0 1-10-10v-2" fill="none" stroke="#f2f7f4" stroke-width="6"
+          stroke-linecap="round"/>
+    <path d="m25 39-8-7 8-7" fill="none" stroke="#f2f7f4" stroke-width="6"
+          stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

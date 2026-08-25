@@ -27,6 +27,17 @@ docker compose --env-file .env.local up --build --detach
 curl --fail http://127.0.0.1:8080/v3/api-docs >/dev/null
 ```
 
+백엔드와 Langfuse를 같은 Docker Compose 프로젝트로 실행하고 모든 AI generation을 평가하려면 다음
+Gradle task를 사용한다.
+
+```bash
+./gradlew runWithLangfuse
+```
+
+Docker Desktop에는 `my-agent`, `langfuse-web`, `langfuse-worker`, PostgreSQL, ClickHouse, Redis와 MinIO가
+`my-agent-ai-test` 프로젝트 아래 표시된다. 백엔드는 `http://127.0.0.1:8080`, Langfuse는
+`http://127.0.0.1:13000`에서 확인한다.
+
 Compose 실행 모드는 `DRAFT_PR`로 고정한다. 원본 branch에 직접 push하지 않으며 parity 검증을 모두
 통과한 `agent/hotfix/*` branch와 Draft PR만 생성할 수 있다. 애플리케이션 프로세스에서는
 OpenAI-compatible SDK가 다른 OpenAI 키를 우선하지 않도록 `OPENAI_API_KEY`도 LiteLLM 키로 설정한다.
@@ -37,6 +48,12 @@ Jenkins와 동일한 검증 task를 실행하되 Docker Desktop의 메모리 부
 `eu/ci/run-integration-tests.sh`를 통해 반드시 실행된다. Docker 내부의 Compose와 fixture 생성기가
 같은 hotfix worktree를 사용하도록 `AGENT_NEWMAN_WORKSPACE_ROOT`는 호스트의
 `.agent/runtime` 절대 경로를 가리키며 setup 스크립트가 자동으로 기록한다.
+
+실행 후 `http://127.0.0.1:8080/`에서 운영 화면을 연다. 기존 `/ui`는 `/`로 이동한다. 실패 PR은
+화면 진입 시 한 번 조회되며
+“새로고침” 버튼으로 다시 조회한다. Grafana는 환경과 시작/종료 시각을 입력해 “관측 조회”를 눌러야
+호출된다. 자연어 요청은 “해석하기”와 “이 해석으로 실행”을 순서대로 누르고, 분석 완료 후 표시되는
+후보 중 하나를 선택해야 Draft PR 작업이 시작된다.
 
 LLM 비용 가드는 역할별로 적용된다. 기본 입력/출력 token 상한은 triage `8000/1500`, reasoning
 `16000/4000`, review `8000/1500`이며 `.env.local`의 `AGENT_AI_*_TOKENS` 값으로 더 낮출 수 있다.

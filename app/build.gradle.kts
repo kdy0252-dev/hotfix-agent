@@ -2,6 +2,8 @@ import org.springframework.boot.gradle.tasks.bundling.BootJar
 
 plugins {
     id("com.example.conventions.spring-web")
+    id("com.example.conventions.spring-thymeleaf")
+    id("com.example.conventions.spring-data")
     id("com.example.conventions.spring-docs")
     id("com.example.conventions.openrewrite")
     id("com.example.conventions.errorprone")
@@ -22,6 +24,9 @@ dependencies {
     testImplementation("org.springframework.modulith:spring-modulith-starter-test")
     implementation(libs.embabel.agent.starter.openai)
     implementation(libs.vavr)
+    implementation(libs.htmx)
+    implementation(libs.flatpickr)
+    runtimeOnly("org.postgresql:postgresql")
     testImplementation("jakarta.persistence:jakarta.persistence-api")
     testImplementation("org.springframework.data:spring-data-commons")
 }
@@ -68,7 +73,7 @@ val aiEvaluationTestTask = tasks.register<Test>("aiEvaluationTest") {
     systemProperty("ai.test.project-root", rootProject.projectDir.absolutePath)
     systemProperty(
         "ai.test.langfuse-env",
-        rootProject.layout.buildDirectory.file("ai-test/langfuse.env").get().asFile.absolutePath,
+        rootProject.layout.projectDirectory.file(".agent/runtime/langfuse.env").asFile.absolutePath,
     )
     useJUnitPlatform()
 }

@@ -62,17 +62,25 @@ public class HotfixQueryService implements QueryHotfixUseCase {
         HotfixResource.Status status = "SUCCESS".equals(snapshot.result())
             ? HotfixResource.Status.RESOLVED : HotfixResource.Status.DRAFT_PR_CREATED;
         var progress = new HotfixResource.Progress(
-            status,
-            resource.progress().branchName(),
-            resource.progress().changedFiles(),
-            resource.progress().changedLines(),
-            resource.progress().verification(),
-            resource.progress().humanReviewReason()
+            new HotfixResource.WorkflowState(
+                status,
+                resource.progress().branchName(),
+                new HotfixResource.ExecutionDetail(
+                    HotfixResource.WorkflowStage.CI,
+                    "SUCCESS".equals(snapshot.result())
+                        ? "Draft PR Jenkins CI가 성공했습니다."
+                        : "Draft PR Jenkins CI 결과를 기다리거나 실패 원인을 확인하고 있습니다."
+                ),
+                resource.progress().failure()
+            ),
+            resource.progress().changes(),
+            resource.progress().verification()
         );
         var publication = new HotfixResource.Publication(
+            resource.publication().reviewBranchUrl(),
             resource.publication().draftPullRequestUrl(),
             snapshot.buildUrl(),
-            snapshot.result()
+            snapshot.pipeline()
         );
         return new HotfixResource(resource.identity(), progress, publication);
     }

@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/20260824-hotfix-agent-state.yaml
+  - include:
+      file: db/changelog/20260824-hotfix-failure-detail.yaml
+  - include:
+      file: db/changelog/20260824-hotfix-ci-stages.yaml
+  - include:
+      file: db/changelog/20260824-analysis-recovery-request.yaml

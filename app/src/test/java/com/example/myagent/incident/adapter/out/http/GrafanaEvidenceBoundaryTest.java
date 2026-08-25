@@ -44,7 +44,7 @@ class GrafanaEvidenceBoundaryTest {
     }
 
     @Test
-    void limitsTempoSearchAndSelectsOnlyThreeDetailTraceIds() {
+    void limitsTempoSearchAndSelectsUpToTwentyDetailTraceIds() {
         ObjectNode response = response();
         ObjectNode frame = frame(EU_APP, "traceID", 25);
         ArrayNode traceIds = (ArrayNode) frame.path("data").path("values").get(1);
@@ -57,7 +57,7 @@ class GrafanaEvidenceBoundaryTest {
         var bounded = boundary.tempo(response.toString(), EU_APP);
 
         assertThat(totalRows(frames(parse(bounded.search())))).isEqualTo(20);
-        assertThat(bounded.detailTraceIds()).hasSize(3);
+        assertThat(bounded.detailTraceIds()).hasSize(20);
         String evidence = boundary.tempoEvidence(
             bounded,
             List.of("{\"trace\":1}", "{\"trace\":2}", "{\"trace\":3}", "{\"trace\":4}")

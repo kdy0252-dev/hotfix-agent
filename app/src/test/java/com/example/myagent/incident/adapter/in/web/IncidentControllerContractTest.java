@@ -17,6 +17,7 @@ import com.example.myagent.incident.application.port.in.AnalyzeIncidentUseCase;
 import com.example.myagent.incident.application.port.in.IncidentUseCaseException;
 import com.example.myagent.incident.application.port.in.QueryAnalysisUseCase;
 import com.example.myagent.incident.application.port.in.QueryHotfixUseCase;
+import com.example.myagent.incident.application.port.in.RefineCandidateUseCase;
 import com.example.myagent.incident.application.port.in.SelectCandidateUseCase;
 import jakarta.validation.Validation;
 import java.time.Instant;
@@ -34,15 +35,18 @@ import tools.jackson.databind.json.JsonMapper;
 class IncidentControllerContractTest {
     MockMvc mockMvc;
     AnalyzeIncidentUseCase analyzeUseCase;
+    RefineCandidateUseCase refineCandidateUseCase;
 
     @BeforeEach
     void setUp() {
         analyzeUseCase = mock(AnalyzeIncidentUseCase.class);
+        refineCandidateUseCase = mock(RefineCandidateUseCase.class);
         var controller = new IncidentController(
             analyzeUseCase,
             mock(QueryAnalysisUseCase.class),
             mock(SelectCandidateUseCase.class),
-            mock(QueryHotfixUseCase.class)
+            mock(QueryHotfixUseCase.class),
+            refineCandidateUseCase
         );
         var objectMapper = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -56,6 +60,17 @@ class IncidentControllerContractTest {
             .setMessageConverters(new JacksonJsonHttpMessageConverter(objectMapper))
             .setValidator(new SpringValidatorAdapter(validator))
             .build();
+    }
+
+    @Test
+    void refinesOneCandidateAgainstTheCurrentAnalysisVersion() throws Exception {
+        when(refineCandidateUseCase.refine(any())).thenReturn(requestedSession());
+
+        mockMvc.perform(post("/api/v1/analyses/analysis-1/candidates/candidate-1/refinement")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"analysisVersion\":1}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.identity.analysisId").value("analysis-1"));
     }
 
     @Test

@@ -1,0 +1,21 @@
+<div id="command-panel" class="command-panel" xmlns:th="http://www.thymeleaf.org">
+    <form class="command-form" data-command-form
+          hx-post="/ui/natural-language/interpretations" hx-target="#command-result"
+          hx-indicator="#command-loading">
+        <input type="hidden" name="idempotencyKey" th:value="${commandIdempotencyKey}">
+        <label for="command-text">작업 요청</label>
+        <textarea id="command-text" name="text" maxlength="2000" required
+                  th:text="${commandText}"></textarea>
+        <div class="form-actions">
+            <span id="command-loading" class="command-progress htmx-indicator">
+                <span class="command-progress-label">
+                    <i aria-hidden="true"></i>
+                    자연어 분석기가 해석 중입니다…
+                </span>
+                <span class="command-progress-bar" aria-hidden="true"><i></i></span>
+            </span>
+            <button type="submit" class="primary">해석하기</button>
+        </div>
+    </form>
+    <div id="command-result" aria-live="polite"></div>
+</div>

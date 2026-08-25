@@ -3,6 +3,7 @@ package com.example.myagent.incident.adapter.out.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.myagent.global.configuration.AgentRuntimeProperties;
+import com.example.myagent.global.configuration.BitbucketProperties;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisSession;
 import com.example.myagent.incident.application.domain.model.analysis.BugCandidate;
 import com.example.myagent.incident.application.domain.model.analysis.SourceRevision;
@@ -10,6 +11,7 @@ import com.example.myagent.incident.application.domain.model.analysis.SourceSpec
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.FileUpdate;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.Proposal;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.Workspace;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +34,7 @@ class LocalGitPatchWorkspaceAdapterTest {
     Path temporaryDirectory;
 
     private Path repository;
+    private Path remoteRepository;
     private LocalGitPatchWorkspaceAdapter adapter;
     private String baseCommit;
 
@@ -48,11 +51,22 @@ class LocalGitPatchWorkspaceAdapterTest {
             "commit", "-m", "initial"
         );
         baseCommit = command(repository, "git", "rev-parse", "HEAD").trim();
+        Path bitbucketRoot = temporaryDirectory.resolve("bitbucket");
+        remoteRepository = bitbucketRoot.resolve("autocrypt/fms.git");
+        Files.createDirectories(remoteRepository.getParent());
+        command(temporaryDirectory, "git", "init", "--bare", remoteRepository.toString());
         adapter = new LocalGitPatchWorkspaceAdapter(
             new AgentRuntimeProperties(
                 AgentRuntimeProperties.Mode.DRAFT_PR,
                 repository,
                 Duration.ofHours(24)
+            ),
+            new BitbucketProperties(
+                URI.create("https://api.bitbucket.test/2.0"),
+                bitbucketRoot.toUri(),
+                "autocrypt",
+                "fms",
+                "token"
             ),
             temporaryDirectory.resolve("state").toString()
         );
@@ -78,6 +92,25 @@ class LocalGitPatchWorkspaceAdapterTest {
     }
 
     @Test
+    void recreatesAnInterruptedWorkspaceFromThePinnedCommit() {
+        String hotfixId = hotfixId();
+        var interrupted = adapter.prepare(analysis(), candidate(), hotfixId).get();
+        adapter.apply(interrupted, new Proposal(
+            "Interrupted proposal",
+            List.of(new FileUpdate(
+                SOURCE_PATH,
+                "class BookingService { boolean incomplete = true; }\n",
+                "Interrupted change"
+            ))
+        )).get();
+
+        var recovered = adapter.prepare(analysis(), candidate(), hotfixId).get();
+
+        assertThat(adapter.currentHead(recovered).get()).isEqualTo(baseCommit);
+        assertThat(recovered.sourceFiles().get(SOURCE_PATH)).doesNotContain("incomplete");
+    }
+
+    @Test
     void mapsAJenkinsWorkspaceLocationToTheEuRepositoryPath() {
         var candidate = candidate(
             "/opt/jenkins-agent/workspace/FMS-EU_PR-1292/" + SOURCE_PATH + ":1"
@@ -86,6 +119,77 @@ class LocalGitPatchWorkspaceAdapterTest {
         var workspace = adapter.prepare(analysis(candidate), candidate, hotfixId()).get();
 
         assertThat(workspace.sourceFiles()).containsOnlyKeys(SOURCE_PATH);
+    }
+
+    @Test
+    void fetchesAMissingCommitWithTokenRemoteInsteadOfSshOrigin() throws Exception {
+        command(repository, "git", "push", remoteRepository.toString(), "main");
+        command(repository, "git", "remote", "add", "origin", "git@bitbucket.invalid:fms.git");
+        Path publisher = temporaryDirectory.resolve("publisher");
+        command(
+            temporaryDirectory,
+            "git", "clone", "--branch", "main", remoteRepository.toString(), publisher.toString()
+        );
+        Files.writeString(publisher.resolve(SOURCE_PATH), "class BookingService { boolean fixed; }\n");
+        command(publisher, "git", "add", "--", SOURCE_PATH);
+        command(
+            publisher,
+            "git", "-c", "user.name=Test", "-c", "user.email=test@localhost",
+            "commit", "-m", "remote-only"
+        );
+        command(publisher, "git", "push", "origin", "main");
+        String remoteCommit = command(publisher, "git", "rev-parse", "HEAD").trim();
+
+        var workspace = adapter.prepare(
+            analysis(candidate(), remoteCommit),
+            candidate(),
+            hotfixId()
+        ).get();
+
+        assertThat(workspace.baseCommit()).isEqualTo(remoteCommit);
+        assertThat(workspace.sourceFiles().get(SOURCE_PATH)).contains("boolean fixed");
+    }
+
+    @Test
+    void reloadsAHumanCommitFromThePublishedReviewBranch() throws Exception {
+        String hotfixId = hotfixId();
+        var workspace = adapter.prepare(analysis(), candidate(), hotfixId).get();
+        var applied = adapter.apply(workspace, new Proposal(
+            "Agent proposal",
+            List.of(new FileUpdate(
+                SOURCE_PATH,
+                "class BookingService { boolean proposed = true; }\n",
+                "Agent proposal"
+            ))
+        )).get();
+
+        var reviewBranch = adapter.publishForHumanReview(
+            analysis(), candidate(), hotfixId, applied.workspace().branchName()
+        ).get();
+        Path reviewer = temporaryDirectory.resolve("reviewer");
+        command(temporaryDirectory, "git", "clone", remoteRepository.toString(), reviewer.toString());
+        command(reviewer, "git", "switch", reviewBranch.name());
+        Files.writeString(
+            reviewer.resolve(SOURCE_PATH),
+            "class BookingService { boolean humanReviewed = true; }\n"
+        );
+        command(reviewer, "git", "add", "--", SOURCE_PATH);
+        command(
+            reviewer,
+            "git", "-c", "user.name=Reviewer", "-c", "user.email=reviewer@localhost",
+            "commit", "-m", "fix: human review"
+        );
+        command(reviewer, "git", "push", "origin", reviewBranch.name());
+        String reviewerCommit = command(reviewer, "git", "rev-parse", "HEAD").trim();
+
+        var reloaded = adapter.reloadHumanChanges(
+            analysis(), candidate(), hotfixId, reviewBranch.name()
+        ).get();
+
+        assertThat(reloaded.patchCommit()).isEqualTo(reviewerCommit);
+        assertThat(reloaded.workspace().sourceFiles().get(SOURCE_PATH))
+            .contains("humanReviewed");
+        assertThat(reloaded.changes().files()).containsExactly(SOURCE_PATH);
     }
 
     @Test
@@ -183,11 +287,15 @@ class LocalGitPatchWorkspaceAdapterTest {
     }
 
     private AnalysisSession analysis(BugCandidate candidate) {
+        return analysis(candidate, baseCommit);
+    }
+
+    private AnalysisSession analysis(BugCandidate candidate, String sourceCommit) {
         return new AnalysisSession(
             new AnalysisSession.Identity("analysis-1", 1, "hash"),
             new AnalysisSession.Snapshot(
                 SourceSpec.branch("main"),
-                new SourceRevision(baseCommit, "main", "test"),
+                new SourceRevision(sourceCommit, "main", "test"),
                 Instant.parse("2026-08-20T00:00:00Z"),
                 Instant.parse("2026-08-21T00:00:00Z")
             ),

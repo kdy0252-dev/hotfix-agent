@@ -15,6 +15,8 @@ springDoc = "3.0.3"
 slf4j = "2.0.18"
 assertj = "3.27.7"
 thymeleafExtrasSpringSecurity = "3.1.5.RELEASE"
+htmx = "2.0.10"
+flatpickr = "4.6.13"
 testcontainers = "2.0.5"
 rsqlParser = "2.4.0"
 rsqlJpa = "7.0.2"
@@ -50,6 +52,8 @@ spring-modulith-bom = { module = "org.springframework.modulith:spring-modulith-b
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 thymeleaf-extras-springsecurity = { module = "org.thymeleaf.extras:thymeleaf-extras-springsecurity6", version.ref = "thymeleafExtrasSpringSecurity" }
+htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
+flatpickr = { module = "org.webjars.npm:flatpickr", version.ref = "flatpickr" }
 
 spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainers" }

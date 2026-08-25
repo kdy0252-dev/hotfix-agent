@@ -151,8 +151,45 @@ class IncidentAnalysisServiceTest {
             1,
             "analysis-key",
             requested.identity().requestHash(),
-            completed
+            completed,
+            request
         ));
+    }
+
+    @Test
+    void resubmitsAnInterruptedAnalysisFromItsPersistedRequest() {
+        var executor = mock(IncidentAnalysisExecutor.class);
+        var statePort = mock(IncidentStatePort.class);
+        var tasks = new CapturingTaskExecutor();
+        var service = new IncidentAnalysisService(executor, statePort, tasks);
+        var request = new AnalysisRequest.Jenkins(
+            "FMS-EU/job/PR-1292",
+            1,
+            SourceSpec.pullRequest(1292)
+        );
+        AnalysisSession requested = requested(request);
+        var envelope = new IncidentStatePort.AnalysisEnvelope(
+            1,
+            "analysis-key",
+            requested.identity().requestHash(),
+            requested,
+            request
+        );
+        AnalysisSession analyzing = withStatus(requested, AnalysisSession.Status.ANALYZING);
+        AnalysisSession completed = completed(requested);
+        when(statePort.findIncompleteAnalyses()).thenReturn(Either.right(List.of(envelope)));
+        when(statePort.saveAnalysis(any())).thenAnswer(invocation -> Either.right(
+            invocation.<IncidentStatePort.AnalysisEnvelope>getArgument(0).session()
+        ));
+        when(executor.analyzing(requested)).thenReturn(analyzing);
+        when(executor.execute(request, requested)).thenReturn(completed);
+
+        int recovered = service.recoverInterruptedAnalyses();
+
+        assertThat(recovered).isEqualTo(1);
+        assertThat(tasks.pending()).isEqualTo(1);
+        tasks.runNext();
+        verify(executor).execute(request, requested);
     }
 
     private AnalysisSession requested(AnalysisRequest request) {

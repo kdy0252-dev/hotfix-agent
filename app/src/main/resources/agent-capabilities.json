@@ -13,6 +13,12 @@
       "tools": []
     },
     {
+      "name": "candidate-refinement-agent",
+      "parent": null,
+      "skills": ["candidate-evidence-recheck", "source-context-selection", "evidence-redaction"],
+      "tools": []
+    },
+    {
       "name": "patch-author-agent",
       "parent": null,
       "skills": ["minimal-patch-proposal", "evidence-redaction"],

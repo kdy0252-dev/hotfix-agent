@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   my-agent:
     build:
@@ -17,6 +23,12 @@ services:
       TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
     ports:
       - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
     volumes:
       - "${AGENT_FMS_REPOSITORY_PATH:-../fms}:/workspace/fms"
       - ./.agent/runtime:/opt/my-agent/.agent/runtime
@@ -24,6 +36,7 @@ services:
       - fms-gradle-cache:/root/.gradle
       - /var/run/docker.sock:/var/run/docker.sock
     restart: "no"
+    logging: *default-logging
 
 volumes:
   fms-gradle-cache:

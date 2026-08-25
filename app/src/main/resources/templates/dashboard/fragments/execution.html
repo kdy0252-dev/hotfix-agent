@@ -1,0 +1,45 @@
+<div id="workflow-list" class="result-card success-card" xmlns:th="http://www.thymeleaf.org"
+     th:attr="hx-get=${storedAnalysis == true ? null : '/ui/fragments/workflows'},hx-trigger=${storedAnalysis == true ? null : 'load delay:500ms'}"
+     hx-swap="outerHTML">
+    <div class="card-title-row">
+        <span class="status" th:text="${execution.status}">STATUS</span>
+        <strong th:text="${storedAnalysis == true} ? 'DB에 저장된 동일 분석 요청이 있습니다.' : '명령이 접수되었습니다.'">
+            명령이 접수되었습니다.
+        </strong>
+    </div>
+    <div th:if="${execution.analysisResource}" class="active-agent">
+        <span class="agent-pulse" aria-hidden="true"></span>
+        <div>
+            <strong>incident-analysis-agent</strong>
+            <small>Jenkins 증거와 대상 소스 코드를 분석 중입니다.</small>
+        </div>
+    </div>
+    <p class="mono" th:text="${execution.resourceId}">resource id</p>
+    <form th:if="${storedAnalysis == true and jenkinsJobPath != null}"
+          class="force-analysis-form" hx-post="/ui/analyses/jenkins"
+          hx-target="#workflow-list" hx-indicator="#workflow-loading"
+          hx-swap="outerHTML"
+          hx-disabled-elt="button" data-agent-request="incident-analysis-agent">
+        <input type="hidden" name="jobPath" th:value="${jenkinsJobPath}">
+        <input type="hidden" name="buildNumber" th:value="${jenkinsBuildNumber}">
+        <input type="hidden" name="pullRequestId" th:value="${jenkinsPullRequestId}">
+        <input type="hidden" name="idempotencyKey" th:value="${jenkinsIdempotencyKey}">
+        <input type="hidden" name="force" value="true">
+        <button type="submit" class="ghost">강제로 다시 분석</button>
+    </form>
+    <div th:if="${execution.analysisResource and storedAnalysis != true}" class="skeleton">
+        저장된 분석 작업을 불러오고 있습니다.
+    </div>
+    <div th:if="${execution.analysisResource and storedAnalysis == true}" class="analysis-shell"
+         th:attr="hx-get=@{/ui/fragments/analyses/{id}(id=${execution.resourceId})}"
+         hx-trigger="load" hx-swap="outerHTML">
+        <div class="skeleton">저장된 AI 분석 결과를 불러오고 있습니다.</div>
+    </div>
+    <p th:if="${execution.hotfixResource}">
+        통합 작업 패널에서 진행 상태를 확인할 수 있습니다.
+    </p>
+    <button th:if="${storedAnalysis == true}" class="small-action"
+            hx-get="/ui/fragments/workflows" hx-target="#workflow-list" hx-swap="outerHTML">
+        통합 작업 목록으로 돌아가기
+    </button>
+</div>

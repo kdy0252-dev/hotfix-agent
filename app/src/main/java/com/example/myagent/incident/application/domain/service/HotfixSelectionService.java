@@ -4,6 +4,7 @@ import com.example.myagent.global.configuration.AgentRuntimeProperties;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisSession;
 import com.example.myagent.incident.application.domain.model.analysis.BugCandidate;
 import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource;
+import com.example.myagent.incident.application.domain.service.internal.HotfixExecutionRegistry;
 import com.example.myagent.incident.application.domain.service.support.IncidentRequestHash;
 import com.example.myagent.incident.application.port.in.IncidentUseCaseException;
 import com.example.myagent.incident.application.port.in.SelectCandidateUseCase;
@@ -15,9 +16,7 @@ import com.example.myagent.incident.application.port.out.SourceRevisionPort;
 import io.vavr.control.Try;
 import java.time.Clock;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -31,7 +30,7 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
     private final AgentRuntimeProperties runtimeProperties;
     private final Clock clock;
     private final TaskExecutor taskExecutor;
-    private final Set<String> activeHotfixes = ConcurrentHashMap.newKeySet();
+    private final HotfixExecutionRegistry executionRegistry;
 
     public HotfixSelectionService(
         IncidentStatePort statePort,
@@ -39,7 +38,8 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
         HotfixWorkflowPort workflowPort,
         AgentRuntimeProperties runtimeProperties,
         Clock clock,
-        TaskExecutor taskExecutor
+        TaskExecutor taskExecutor,
+        HotfixExecutionRegistry executionRegistry
     ) {
         this.statePort = statePort;
         this.sourceRevisionPort = sourceRevisionPort;
@@ -47,6 +47,7 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
         this.runtimeProperties = runtimeProperties;
         this.clock = clock;
         this.taskExecutor = taskExecutor;
+        this.executionRegistry = executionRegistry;
     }
 
     @Override
@@ -97,13 +98,11 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
         BugCandidate candidate
     ) {
         String hotfixId = envelope.resource().identity().hotfixId();
-        if (!activeHotfixes.add(hotfixId)) {
-            return;
-        }
-        Try.run(() -> taskExecutor.execute(() -> Try.run(
-                () -> process(envelope, analysis, candidate)
-            ).andFinally(() -> activeHotfixes.remove(hotfixId)).get()))
-            .onFailure(exception -> activeHotfixes.remove(hotfixId));
+        executionRegistry.submit(
+            hotfixId,
+            () -> process(envelope, analysis, candidate),
+            taskExecutor
+        );
     }
 
     private void process(
@@ -115,7 +114,9 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
         HotfixResource completed = Try.of(() -> workflowPort.execute(
             analysis,
             candidate,
-            hotfixId
+            hotfixId,
+            update -> saveProgress(envelope, update),
+            () -> executionRegistry.isCancelled(hotfixId)
         ).fold(
             failure -> failed(
                 envelope.resource(),
@@ -127,12 +128,36 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
                 envelope.resource(),
                 "핫픽스 작업을 완료하지 못했습니다."
             ));
-        statePort.saveHotfix(new HotfixEnvelope(
-            envelope.schemaVersion(),
-            envelope.idempotencyKey(),
-            envelope.requestHash(),
-            completed
-        )).getOrElseThrow(this::failure);
+        executionRegistry.runIfActive(hotfixId, () -> statePort.saveHotfix(new HotfixEnvelope(
+                envelope.schemaVersion(),
+                envelope.idempotencyKey(),
+                envelope.requestHash(),
+                completed
+            )).getOrElseThrow(this::failure));
+    }
+
+    private void saveProgress(
+        HotfixEnvelope envelope,
+        HotfixWorkflowPort.ProgressUpdate update
+    ) {
+        HotfixResource resource = envelope.resource();
+        var progress = new HotfixResource.Progress(
+            new HotfixResource.WorkflowState(
+                update.status(),
+                update.branchName(),
+                new HotfixResource.ExecutionDetail(update.stage(), update.message()),
+                null
+            ),
+            resource.progress().changes(),
+            resource.progress().verification()
+        );
+        executionRegistry.runIfActive(resource.identity().hotfixId(),
+            () -> statePort.saveHotfix(new HotfixEnvelope(
+                envelope.schemaVersion(),
+                envelope.idempotencyKey(),
+                envelope.requestHash(),
+                new HotfixResource(resource.identity(), progress, resource.publication())
+            )).getOrElseThrow(this::failure));
     }
 
     private HotfixResource selected(
@@ -147,25 +172,36 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
                 candidate.identity().candidateId()
             ),
             new HotfixResource.Progress(
-                HotfixResource.Status.SELECTED,
-                null,
-                0,
-                0,
-                HotfixResource.Verification.empty(),
-                null
+                new HotfixResource.WorkflowState(
+                    HotfixResource.Status.SELECTED,
+                    null,
+                    new HotfixResource.ExecutionDetail(
+                        HotfixResource.WorkflowStage.WORKSPACE_PREPARATION,
+                        "후보 선택이 완료되어 작업을 준비하고 있습니다."
+                    ),
+                    null
+                ),
+                HotfixResource.ChangeMetrics.empty(),
+                HotfixResource.Verification.empty()
             ),
-            new HotfixResource.Publication(null, null, null)
+            HotfixResource.Publication.empty()
         );
     }
 
     private HotfixResource failed(HotfixResource resource, String reason) {
         var progress = new HotfixResource.Progress(
-            HotfixResource.Status.FAILED,
-            resource.progress().branchName(),
-            resource.progress().changedFiles(),
-            resource.progress().changedLines(),
-            resource.progress().verification(),
-            reason
+            new HotfixResource.WorkflowState(
+                HotfixResource.Status.FAILED,
+                resource.progress().branchName(),
+                null,
+                new HotfixResource.FailureDetail(
+                    HotfixResource.WorkflowStage.PATCH_GENERATION,
+                    "HOTFIX_EXECUTION_FAILED",
+                    reason
+                )
+            ),
+            resource.progress().changes(),
+            resource.progress().verification()
         );
         return new HotfixResource(resource.identity(), progress, resource.publication());
     }
@@ -199,9 +235,7 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
     }
 
     private void validateCandidate(BugCandidate candidate) {
-        if (candidate.identity().eligibility() != BugCandidate.Eligibility.ELIGIBLE
-            || candidate.evidence().sourceLocations().isEmpty()
-            || candidate.evidence().evidenceRefs().isEmpty()) {
+        if (!candidate.automaticFixReady()) {
             throw new IncidentUseCaseException(
                 "CANDIDATE_NOT_ELIGIBLE",
                 "자동 수정 eligibility 또는 evidence coverage가 부족한 후보입니다."

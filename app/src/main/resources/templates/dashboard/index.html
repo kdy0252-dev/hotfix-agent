@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FMS Hotfix Control</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
+    <link rel="stylesheet" th:href="@{/webjars/flatpickr/4.6.13/dist/flatpickr.min.css}">
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <script defer th:src="@{/webjars/htmx.org/2.0.10/dist/htmx.min.js}"></script>
+    <script defer th:src="@{/webjars/flatpickr/4.6.13/dist/flatpickr.min.js}"></script>
+    <script defer th:src="@{/webjars/flatpickr/4.6.13/dist/l10n/ko.js}"></script>
+    <script defer th:src="@{/js/dashboard.js}"></script>
+</head>
+<body>
+<header class="topbar">
+    <div>
+        <p class="eyebrow">AUTOCRYPT · FMS EU</p>
+        <h1>Hotfix Control</h1>
+    </div>
+    <div class="integration-statuses" aria-label="외부 시스템 연결 상태">
+        <span class="integration-status"><i aria-hidden="true"></i> BITBUCKET <b>CONNECTED</b></span>
+        <span class="integration-status"><i aria-hidden="true"></i> JENKINS <b>CONNECTED</b></span>
+        <span class="integration-status"><i aria-hidden="true"></i> GRAFANA <b>CONNECTED</b></span>
+    </div>
+</header>
+
+<main>
+    <div class="dashboard-grid">
+        <section class="panel">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">JENKINS × BITBUCKET</p>
+                    <h2>빌드 실패 PR</h2>
+                </div>
+                <button class="ghost" hx-get="/ui/fragments/pull-requests"
+                        hx-target="#pull-request-list" hx-swap="outerHTML">새로고침</button>
+            </div>
+            <div id="pull-request-list" hx-get="/ui/fragments/pull-requests"
+                 hx-trigger="load" hx-swap="outerHTML">
+                <div class="skeleton">실패한 PR을 불러오는 중입니다.</div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">GRAFANA · EU APP</p>
+                    <h2>운영 알람과 Trace</h2>
+                </div>
+            </div>
+            <form class="filter-form observability-query-form"
+                  hx-get="/ui/fragments/observability" hx-target="#observability-list"
+                  hx-indicator="this" hx-disabled-elt="button, select, input">
+                <label class="filter-field">환경
+                    <select name="environment">
+                        <option value="PROD" selected>PROD</option>
+                        <option value="QA">QA</option>
+                        <option value="DEV">DEV</option>
+                    </select>
+                </label>
+                <label class="filter-field">시작 (KST)
+                    <input class="date-time-picker" type="datetime-local" name="startAt"
+                           th:value="${startAt}" required>
+                </label>
+                <label class="filter-field">종료 (KST)
+                    <input class="date-time-picker" type="datetime-local" name="endAt"
+                           th:value="${endAt}" required>
+                </label>
+                <button type="submit" class="secondary observability-query-button">
+                    <span class="query-button-label">관측 조회</span>
+                    <span class="query-button-loading">
+                        <span class="query-spinner" aria-hidden="true"></span>
+                        Grafana 조회 중…
+                    </span>
+                    <i aria-hidden="true"></i>
+                </button>
+            </form>
+            <div id="observability-list" class="empty-state">
+                환경과 시간 범위를 확인한 뒤 조회하세요. 자동 polling하지 않습니다.
+            </div>
+        </section>
+    </div>
+
+    <section class="panel progress-panel workflow-panel" aria-labelledby="workflow-title">
+        <div class="section-heading">
+            <div>
+                <p class="section-kicker">AGENT WORKFLOW STATE</p>
+                <h2 id="workflow-title">분석 및 Draft PR 작업</h2>
+            </div>
+            <span class="live-indicator"><i></i> LOCAL LIVE</span>
+        </div>
+        <div id="workflow-loading" class="agent-activity htmx-indicator" role="status">
+            <span class="agent-pulse" aria-hidden="true"></span>
+            <div>
+                <strong>에이전트 작업을 시작하고 있습니다.</strong>
+                <p>요청 접수와 저장 상태를 확인하고 있습니다.</p>
+            </div>
+        </div>
+        <div id="workflow-list" hx-get="/ui/fragments/workflows"
+             hx-trigger="load" hx-swap="outerHTML">
+            <div class="skeleton">DB에 저장된 작업 상태를 불러오고 있습니다.</div>
+        </div>
+    </section>
+</main>
+<button id="chat-launcher" class="chat-launcher" type="button"
+        aria-controls="chat-drawer" aria-expanded="false" aria-label="Hotfix 상담 열기">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5 5.5h14v10H9l-4 3v-13Z"></path>
+        <path d="M8 9h8M8 12h5"></path>
+    </svg>
+    <span>AI 상담</span>
+</button>
+<aside id="chat-drawer" class="chat-drawer" aria-hidden="true" aria-label="FMS Hotfix AI 상담">
+    <header class="chat-header">
+        <div>
+            <span class="eyebrow">FMS HOTFIX ASSISTANT</span>
+            <h2>무엇을 확인할까요?</h2>
+        </div>
+        <button id="chat-close" type="button" class="modal-close" aria-label="상담창 닫기">×</button>
+    </header>
+    <div id="chat-messages" class="chat-messages" aria-live="polite">
+        <div class="chat-message assistant">
+            장애나 실패 빌드를 편하게 설명해 주세요. 최신 실패 빌드를 지정하지 않아도 찾아서 분석할 수 있습니다.
+        </div>
+        <div id="chat-history"></div>
+        <div id="command-result"></div>
+    </div>
+    <div id="command-panel" class="command-panel chat-command-panel">
+        <form class="command-form" data-command-form hx-post="/ui/natural-language/interpretations"
+              hx-target="#command-result" hx-indicator="#command-loading">
+            <input type="hidden" name="idempotencyKey" th:value="${commandIdempotencyKey}">
+            <label class="sr-only" for="command-text">작업 요청</label>
+            <textarea id="command-text" name="text" maxlength="2000" required rows="3"
+                      placeholder="예: 최근 실패한 빌드 원인을 분석해줘"></textarea>
+            <span id="command-loading" class="command-progress htmx-indicator">
+                <span class="command-progress-label">
+                    <i aria-hidden="true"></i>
+                    자연어 분석기가 해석 중입니다…
+                </span>
+                <span class="command-progress-bar" aria-hidden="true"><i></i></span>
+            </span>
+            <div class="chat-form-actions">
+                <small>Enter 전송 · Shift+Enter 줄바꿈</small>
+                <button type="submit" class="primary">보내기</button>
+            </div>
+        </form>
+    </div>
+</aside>
+<dialog id="action-confirmation-modal" class="detail-modal confirmation-modal"
+        aria-labelledby="action-confirmation-title">
+    <div class="detail-modal-head">
+        <div>
+            <span class="eyebrow">ACTION CONFIRMATION</span>
+            <h3 id="action-confirmation-title">작업을 취소할까요?</h3>
+        </div>
+        <button type="button" class="modal-close" data-confirmation-cancel
+                aria-label="확인 창 닫기">×</button>
+    </div>
+    <p id="action-confirmation-message" class="confirmation-message">
+        진행 중인 작업을 취소하고 로컬 기록을 삭제합니다.
+    </p>
+    <div class="confirmation-actions">
+        <button type="button" class="ghost" data-confirmation-cancel>돌아가기</button>
+        <button type="button" class="danger-action" data-confirmation-accept>
+            작업 취소 및 삭제
+        </button>
+    </div>
+</dialog>
+<div id="toast-region" class="toast-region" role="region" aria-label="알림"
+     aria-live="assertive" aria-atomic="true"></div>
+</body>
+</html>

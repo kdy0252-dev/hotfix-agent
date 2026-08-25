@@ -1,6 +1,21 @@
 spring:
   application:
     name: my-agent
+  datasource:
+    url: ${AGENT_DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/postgres}
+    username: ${AGENT_DATABASE_USERNAME:postgres}
+    password: ${AGENT_DATABASE_PASSWORD:postgres}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: hotfix_agent
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.yaml
+    default-schema: hotfix_agent
+    liquibase-schema: hotfix_agent
   ai:
     chat:
       observations:

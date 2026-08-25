@@ -1,0 +1,40 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  agent-schema-init:
+    image: docker.io/postgres:17
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      - psql
+      - --host=postgres
+      - --username=postgres
+      - --dbname=postgres
+      - --command=CREATE SCHEMA IF NOT EXISTS hotfix_agent
+    logging: *default-logging
+
+  my-agent:
+    depends_on:
+      langfuse-web:
+        condition: service_started
+      agent-schema-init:
+        condition: service_completed_successfully
+    environment:
+      AGENT_DATABASE_URL: jdbc:postgresql://postgres:5432/postgres?currentSchema=hotfix_agent
+      AGENT_DATABASE_USERNAME: postgres
+      AGENT_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://langfuse-web:3000/api/public/otel
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_SERVICE_NAME: my-agent
+      OTEL_TRACES_SAMPLER: always_on
+      SPRING_AI_CHAT_OBSERVATIONS_LOG_PROMPT: "true"
+      SPRING_AI_CHAT_OBSERVATIONS_LOG_COMPLETION: "true"
+      SPRING_AI_CHAT_CLIENT_OBSERVATIONS_LOG_PROMPT: "true"
+      SPRING_AI_CHAT_CLIENT_OBSERVATIONS_LOG_COMPLETION: "true"

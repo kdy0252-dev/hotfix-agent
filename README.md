@@ -15,7 +15,8 @@ LLM orchestration은 Embabel을 사용하고 모델 호출은 사내 LiteLLM Ope
 - Gradle/coverage/Jib/Compose health/Newman 전체 통과 후 reviewer 없는 Draft PR 생성
 - Draft PR Jenkins 상태의 명시적 1회 갱신 API
 - 자연어 해석과 version/hash 확인 실행이 분리된 API
-- JSON 상태 저장, idempotency, LLM 입력·출력 budget과 재시도 제한
+- HTMX 기반 SSR 운영 UI: 실패 PR, Grafana 알람·Trace, 자연어 실행과 Draft 진행 상태
+- Langfuse PostgreSQL의 분리된 `hotfix_agent` 스키마 상태 저장, idempotency, LLM budget과 재시도 제한
 - Embabel AI mock 및 LiteLLM judge/Langfuse 평가
 
 2026-08-21에 FMS PR #1292의 의도적 컴파일 실패를 대상으로 전체 흐름을 검증했다. 로컬 parity 4단계와
@@ -38,6 +39,7 @@ my-agent/
 ├── app/src/main/java/com/example/myagent/
 │   ├── incident/                 # 분석, 후보, hotfix와 외부 adapter
 │   ├── command/                  # 자연어 해석·확인·typed dispatch
+│   ├── dashboard/                # HTMX SSR 운영 UI vertical slice
 │   ├── orchestrator/             # vertical slice 간 명시적 gateway
 │   └── global/                   # 공통 설정, annotation, redaction/budget
 ├── app/src/{test,aiMockTest,aiEvaluationTest}/
@@ -90,9 +92,28 @@ docker compose --env-file .env.local up --build --detach
 curl --fail http://127.0.0.1:8080/actuator/health
 ```
 
+백엔드와 Langfuse를 모두 Docker로 실행하고 매 generation을 평가하려면 다음 명령을 사용한다.
+
+```zsh
+./gradlew runWithLangfuse
+```
+
+이 명령은 Docker Compose 프로젝트 `my-agent-ai-test`에 백엔드, Langfuse와 저장소 서비스를 함께
+기동한다. 백엔드는 `http://127.0.0.1:8080`, Langfuse는 `http://127.0.0.1:13000`에서 확인한다.
+
 Compose는 FMS 저장소, `.agent/runtime`, Gradle cache와 Docker socket을 연결한다. Docker Desktop에서
 Testcontainers는 `host.docker.internal`을 사용하며 Newman fixture와 Compose volume은
 `AGENT_NEWMAN_WORKSPACE_ROOT`의 호스트 절대 경로를 사용한다.
+
+운영 UI는 `http://127.0.0.1:8080/`에서 확인한다. 기존 `/ui` 요청은 `/`로 이동한다. 최근 분석 결과와
+Draft PR 진행 이력은 PostgreSQL에서 복원되어 분석부터 Jenkins CI까지 하나의 작업 카드로 표시된다.
+한 분석에 여러 원인이 있으면 후보별 hotfix, branch와 Draft PR 흐름을 독립적으로 추적한다. 작업 카드의
+삭제는 로컬 상태에만 적용되며 이미 생성된 Bitbucket PR이나 Jenkins 기록은 삭제하지 않는다.
+동일 PR/build/commit 요청은 저장 결과를 재사용하고 사용자가
+명시한 경우에만 강제로 새 분석을 생성한다. 실패 PR은 최초
+화면 진입 또는 사용자 새로고침 때만
+조회하고, Grafana는 사용자가 환경과 시간 범위를 제출할 때만 조회한다. 화면의 2초 갱신은 외부 시스템이
+아니라 PostgreSQL의 agent 상태만 읽는다. `.agent/runtime`은 격리 worktree와 검증 산출물에만 사용한다.
 
 OpenAPI UI는 `http://127.0.0.1:8080/swagger-ui.html`, JSON은 `/v3/api-docs`에서 확인한다.
 

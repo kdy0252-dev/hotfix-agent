@@ -14,8 +14,9 @@
 | `SRS-GIT-001~007` | 전용 worktree, 사전·사후 path/10 files/500 lines gate | `LocalGitPatchWorkspaceAdapterTest` |
 | `SRS-VER-001~014` | focused retry, 독립 review, Jenkins parity profile/commit binding | workflow, parity profile, provenance tests |
 | `SRS-PR-001~007` | parity 재검증, hotfix branch push, reviewer 없는 Draft, 명시적 CI refresh | PR adapter 및 hotfix query tests |
-| `SRS-STA-001~005` | schema version JSON, 임시 파일 + atomic move, 재요청 복구 | persistence 및 service idempotency tests |
+| `SRS-STA-001~008` | 분리 PostgreSQL schema, 관계형 순서·분석 원문 보존, 재기동 시 분석·로컬 hotfix 재제출, Draft PR 비중복 | Liquibase/JPA mapping, `IncidentAnalysisServiceTest`, `HotfixRecoveryServiceTest`, worktree recreation test |
 | `SRS-NL-001~014` | 폐쇄 intent, 2단계 확인, hash/version/TTL, 기존 typed gateway 재사용 | 자연어 controller/service/module adapter tests와 AI mock |
+| `SRS-UI-001~017` | dashboard vertical slice, 카드 단위 SSR 갱신, 분석 버튼 진행·중복 재분석, 세부 단계·실패·검증 이력, 사람 branch 수정과 재검증 | `DashboardControllerTest`, `GuardedHotfixWorkflowAdapterTest`, `LocalGitPatchWorkspaceAdapterTest`, JPA mapping 및 architecture tests |
 | `SRS-NFR-SEC-*` | redaction, loopback, AI prompt/completion observation 비활성화 | redactor 및 application configuration tests |
 | `SRS-NFR-PER-*` | 역할별 입출력 budget, FIRE_ONCE action, provider retry와 token metric | evidence boundary, `LlmPromptBudgetTest`, `AgentCapabilityArchTest`, configuration tests |
 | `SRS-NFR-MNT-*` | port 경계, capability 최대 5, 부모-자식 소유권, Vavr Try | 전체 `*ArchTest` |

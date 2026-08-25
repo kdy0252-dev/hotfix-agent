@@ -2,6 +2,7 @@ package com.example.myagent.incident.application.port.out;
 
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisEvidence;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisRequest;
+import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource.CiPipeline;
 import io.vavr.control.Either;
 
 public interface JenkinsEvidencePort {
@@ -11,7 +12,10 @@ public interface JenkinsEvidencePort {
 
     Either<IncidentFailure, CiBuildSnapshot> refreshPullRequestBuild(String pullRequestUrl);
 
-    record CiBuildSnapshot(String result, String buildUrl) {
+    record CiBuildSnapshot(String buildUrl, CiPipeline pipeline) {
+        public String result() {
+            return pipeline.status();
+        }
     }
 
     record BuildSnapshot(String revision) {

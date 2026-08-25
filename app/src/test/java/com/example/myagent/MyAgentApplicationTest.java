@@ -7,14 +7,24 @@ import com.embabel.agent.core.AgentPlatform;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
+@Testcontainers
 @SpringBootTest(properties = {
     "embabel.agent.platform.models.openai.api-key=test-api-key",
     "spring.main.web-application-type=none"
 })
 class MyAgentApplicationTest {
+
+    @Container
+    @ServiceConnection
+    static final PostgreSQLContainer POSTGRESQL = new PostgreSQLContainer("postgres:17")
+        .withInitScript("create-hotfix-agent-schema.sql");
 
     @Autowired
     ApplicationContext applicationContext;

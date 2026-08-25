@@ -47,7 +47,11 @@ class NaturalLanguageCommandAgentAiMockTest {
         var invocation = context.getLlmInvocations().getFirst();
         assertThat(invocation.getPrompt())
             .contains("Untrusted user text", "PR 1285 빌드 181을 분석해줘")
-            .contains("Allowed intents only");
+            .contains(
+                "Allowed intents only",
+                "failed pull request or its cause is ANALYZE_JENKINS",
+                "Never emit ANALYZE_PULL_REQUEST"
+            );
         assertThat(invocation.getInteraction().getToolGroups()).isEmpty();
         assertThat(invocation.getInteraction().getLlm().getMaxTokens()).isEqualTo(4_000);
         assertThat(invocation.getInteraction().getId())

@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260824-01-hotfix-agent-state
+      author: dykim
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/20260824-hotfix-agent-state.sql
+            splitStatements: true
+            stripComments: true

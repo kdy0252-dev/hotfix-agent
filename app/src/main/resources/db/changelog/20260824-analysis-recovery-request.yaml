@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260824-04-analysis-recovery-request
+      author: dykim
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/20260824-analysis-recovery-request.sql
+            splitStatements: true
+            stripComments: true

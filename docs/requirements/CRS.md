@@ -6,9 +6,9 @@
 | --- | --- |
 | 문서명 | Customer Requirements Specification (CRS) |
 | 시스템명 | Embabel 기반 FMS 핫픽스 에이전트 |
-| 버전 | 1.2 |
+| 버전 | 1.3 |
 | 상태 | 구현 기준선 |
-| 기준일 | 2026-08-21 |
+| 기준일 | 2026-08-24 |
 | 대상 저장소 | `autocrypt/fms` |
 | 운영 담당 | BE팀 |
 
@@ -52,6 +52,7 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 - 사용자가 선택한 후보에 대한 코드 수정과 로컬 검증
 - `agent/hotfix/*` branch 및 Bitbucket Draft PR 생성
 - 명시적 요청에 따른 Jenkins PR build 상태 확인
+- 실패 PR, 운영 신호, 자연어 명령과 Draft 진행 상태를 제공하는 로컬 운영 UI
 
 ### 4.2 제외 범위
 
@@ -89,6 +90,14 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 4. 사용자가 해석 결과의 버전과 명령 hash를 확인해 명시적으로 실행한다.
 5. 실행된 명령은 기존 구조화 API와 같은 후보 선택, 검증, Draft PR 가드를 통과한다.
 
+### 5.4 운영 UI
+
+1. 사용자는 실패한 open PR branch와 Jenkins build를 목록에서 확인하고 원본 화면으로 이동한다.
+2. 사용자는 환경과 시작/종료 시각을 제출하여 EU app의 운영 알람과 Trace를 조회한다.
+3. 사용자는 목록의 분석 버튼 또는 자연어 입력으로 해석을 요청하고, 해석 결과를 확인해 실행한다.
+4. 분석 완료 후 사용자가 후보를 선택해야만 Draft PR workflow가 시작된다.
+5. 사용자는 로컬 상태를 통해 patch, 검증, Draft PR과 CI 진행 단계를 확인한다.
+
 ## 6. 고객 기능 요구사항
 
 ### 6.1 분석 요청
@@ -99,7 +108,7 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 | CRS-FUN-002 | 시스템은 Jenkins job path와 build number를 사용하여 `FMS-EU` 실패 build를 분석할 수 있어야 한다. |
 | CRS-FUN-003 | 시스템은 Grafana 관측 분석 시 탐색 시작/종료 시각과 `DEV`, `QA`, `PROD` 환경을 입력받아야 한다. |
 | CRS-FUN-004 | Grafana 관측 분석 대상은 항상 `eu-app`이어야 하며 사용자가 다른 service를 지정할 수 없어야 한다. |
-| CRS-FUN-005 | Grafana 관측 시간 범위는 사용자가 입력해야 하며 시작 시각은 종료 시각보다 앞서야 하고 최대 60분을 넘지 않아야 한다. |
+| CRS-FUN-005 | Grafana 관측 시간 범위는 사용자가 입력해야 하며 시작 시각은 종료 시각보다 앞서야 하고 최대 31일을 넘지 않아야 한다. |
 | CRS-FUN-006 | 사용자는 분석 기준으로 존재하는 Bitbucket branch 또는 open PR 번호를 지정할 수 있어야 한다. |
 
 ### 6.2 후보 목록과 선택
@@ -128,6 +137,13 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 | CRS-FUN-021 | 자연어 해석은 실행과 분리되어야 하며 사용자가 해석 버전과 명령 hash를 확인한 뒤에만 실행할 수 있어야 한다. |
 | CRS-FUN-022 | 자연어로 시작한 작업도 기존 구조화 API와 동일한 analysis, candidate selection, Jenkins 동등 검증과 Draft PR 흐름을 사용해야 한다. |
 | CRS-FUN-023 | 자연어 요청에 필수 식별자·시간 범위·환경·source가 없거나 여러 해석이 가능하면 시스템은 실행하지 않고 명확화 항목을 반환해야 한다. |
+| CRS-FUN-024 | 시스템은 실패한 open PR의 branch, commit, Jenkins build와 Bitbucket/Jenkins 링크를 SSR UI에 표시해야 한다. |
+| CRS-FUN-025 | 시스템은 사용자가 제출한 환경·시간 범위의 EU app Grafana 알람과 Trace를 목록으로 표시하고 Grafana 링크를 제공해야 한다. |
+| CRS-FUN-026 | UI 자연어 입력은 해석 확인과 후보 선택 단계를 거쳐야 하며 한 번의 입력으로 Draft PR을 직접 생성하지 않아야 한다. |
+| CRS-FUN-027 | UI는 Draft PR workflow의 현재 단계와 생성된 Bitbucket/Jenkins 링크를 표시해야 한다. |
+| CRS-FUN-028 | 실패한 workflow는 현재 세부 단계, 실패 코드, 복구 방법과 실행된 검증 결과를 페이지 재로드 후에도 표시해야 한다. |
+| CRS-FUN-029 | 수정 branch가 생성된 경우 사용자는 해당 branch를 사람 검토용으로 게시하고 직접 수정 commit을 push할 수 있어야 한다. |
+| CRS-FUN-030 | 사람이 push한 commit도 자동 patch와 동일한 변경 정책, 테스트, AI 검토와 Jenkins 동등성 검증을 다시 통과해야 Draft PR을 생성할 수 있어야 한다. |
 
 ## 7. 고객 안전 요구사항
 

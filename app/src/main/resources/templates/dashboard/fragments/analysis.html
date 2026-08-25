@@ -1,0 +1,47 @@
+<section class="analysis-shell" xmlns:th="http://www.thymeleaf.org"
+         th:attr="hx-get=@{/ui/fragments/analyses/{id}(id=${analysis.identity.analysisId})},hx-trigger=${analysis.completed ? null : 'every 2s'}"
+         hx-swap="outerHTML">
+    <div class="card-title-row">
+        <span class="status" th:text="${analysis.status}">ANALYZING</span>
+        <strong>버그 후보</strong>
+    </div>
+    <div th:if="${!analysis.completed}" class="active-agent">
+        <span class="agent-pulse" aria-hidden="true"></span>
+        <div>
+            <strong>incident-analysis-agent</strong>
+            <small>로그 증거와 소스 문맥에서 버그 후보를 생성하고 있습니다.</small>
+        </div>
+    </div>
+    <div th:if="${analysis.completed}" class="active-agent complete">
+        <span class="agent-pulse" aria-hidden="true"></span>
+        <div>
+            <strong>incident-analysis-agent 완료</strong>
+            <small>분석 결과를 확인하고 수정 후보를 선택하세요.</small>
+        </div>
+    </div>
+    <div th:if="${!analysis.completed}" class="skeleton">증거와 소스 코드를 분석하고 있습니다.</div>
+    <p th:if="${analysis.failureReason != null}" class="error-text"
+       th:text="${analysis.failureReason}">failure</p>
+    <div th:if="${analysis.completed and #lists.isEmpty(analysis.candidates)}" class="empty-state">
+        선택 가능한 후보가 없습니다.
+    </div>
+    <article th:each="candidate : ${analysis.candidates}" class="candidate-card">
+        <div class="card-title-row">
+            <span class="confidence" th:text="|${candidate.confidencePercent}%|">90%</span>
+            <h3 th:text="${candidate.title}">candidate</h3>
+        </div>
+        <p th:text="${candidate.rootCause}">root cause</p>
+        <form th:if="${candidate.selectable}" th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${analysis.identity.analysisId})}"
+              hx-target="#workflow-list" hx-indicator="#selection-loading" hx-swap="outerHTML">
+            <input type="hidden" name="analysisVersion" th:value="${analysis.identity.version}">
+            <input type="hidden" name="candidateId" th:value="${candidate.candidateId}">
+            <input type="hidden" name="idempotencyKey" th:value="${selectionIdempotencyKey}">
+            <button type="submit" class="primary">이 후보로 Draft PR 생성</button>
+        </form>
+        <div th:if="${!candidate.selectable}" class="selection-restriction">
+            <strong>Draft PR 생성 불가</strong>
+            <span th:text="${candidate.selectionRestriction}">선택 불가 사유</span>
+        </div>
+    </article>
+    <span id="selection-loading" class="htmx-indicator">patch-author-agent를 시작하고 있습니다…</span>
+</section>

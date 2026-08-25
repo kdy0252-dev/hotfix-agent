@@ -95,7 +95,7 @@ Content-Type: application/json
 
 | 필드 | 검증 |
 | --- | --- |
-| `startAt`, `endAt` | timezone offset 필수, start < end, 최대 60분 |
+| `startAt`, `endAt` | timezone offset 필수, start < end, 최대 31일 |
 | `environment` | `DEV`, `QA`, `PROD` |
 | `source` | 2절 Source 모델 |
 

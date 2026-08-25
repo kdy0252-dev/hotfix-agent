@@ -53,7 +53,8 @@ public class IncidentAnalysisAgent {
         return triage(
             new TriageMaterial(
                 "OBSERVABILITY",
-                "Correlate metrics, traces, logs, and alerts by time without changing the EU app scope.",
+                "Correlate metrics, traces, logs, alerts, and retrieved source locations by time "
+                    + "without changing the EU app scope.",
                 input.evidence().toString(),
                 input.evidence().evidenceRefs()
             ),
@@ -73,6 +74,8 @@ public class IncidentAnalysisAgent {
             one concrete source location. Use HUMAN_ONLY for migrations, secrets, infrastructure,
             Jenkinsfile, deployment manifests, Helm, Kubernetes, or operational decisions. Use
             INSUFFICIENT_EVIDENCE when evidence cannot support a bounded code change.
+            Source locations must use exact paths and line numbers from Source context. A single
+            candidate may include multiple files when one root cause requires an atomic cross-file fix.
             Confidence must be between 0 and 1. Every candidate needs evidence refs, counter evidence,
             a minimal fix summary, and a verification summary. Do not output secrets or full logs.
 

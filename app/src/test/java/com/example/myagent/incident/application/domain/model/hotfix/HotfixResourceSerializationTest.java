@@ -21,7 +21,7 @@ class HotfixResourceSerializationTest {
                 "patch-commit",
                 new JenkinsfileProfile("eu/Jenkinsfile", "sha256", 3)
             ),
-            List.of(new StageResult("jenkins-gradle-verification", 0, true))
+            List.of(new StageResult("jenkins-gradle-verification", 0, true, "passed"))
         );
 
         var json = new ObjectMapper().valueToTree(verification);

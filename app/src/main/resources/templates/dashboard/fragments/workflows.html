@@ -1,0 +1,353 @@
+<div id="workflow-list" class="workflow-list" xmlns:th="http://www.thymeleaf.org">
+    <div th:if="${#lists.isEmpty(workflows)}" class="empty-state">
+        저장된 작업이 없습니다. 실패 PR에서 AI 분석을 요청하세요.
+    </div>
+    <div th:if="${!#lists.isEmpty(workflows)}" class="workflow-filter-toolbar">
+        <label>
+            브랜치 선택
+            <select data-workflow-filter aria-label="분석 작업 브랜치 선택">
+                <option value="">전체 브랜치</option>
+                <option th:each="branch : ${workflowBranches}"
+                        th:value="${branch}" th:text="${branch}">feature/example</option>
+            </select>
+        </label>
+        <span data-workflow-filter-count th:text="|${#lists.size(workflows)}개 작업|">
+            0개 작업
+        </span>
+    </div>
+    <article th:fragment="card" th:each="item : ${workflows}" class="workflow-card"
+             th:id="|workflow-analysis-${item.storedAnalysis.analysis.identity.analysisId}|"
+             th:attr="data-workflow-reference=${item.storedAnalysis.source.branch},
+                      hx-get=${item.active ?
+                         '/ui/fragments/workflows/' + item.storedAnalysis.analysis.identity.analysisId : null},
+                      hx-trigger=${item.active ? 'every 2s' : null},
+                      hx-target=${item.active ? 'this' : null},
+                      hx-swap=${item.active ? 'outerHTML' : null}">
+        <div class="hotfix-head">
+            <div>
+                <div class="card-title-row">
+                    <span class="status" th:classappend="${item.storedAnalysis.analysis.status}"
+                          th:text="${item.storedAnalysis.analysis.status}">STATUS</span>
+                    <h3 th:text="${item.storedAnalysis.source.reference}">PR-1292</h3>
+                    <span class="stored-badge">STORED</span>
+                </div>
+                <p class="mono muted" th:if="${item.storedAnalysis.source.commit != null}"
+                   th:text="${item.storedAnalysis.source.commit.substring(0, 12)}">commit</p>
+            </div>
+            <div class="workflow-card-actions">
+                <span class="mono"
+                      th:text="${item.storedAnalysis.analysis.identity.analysisId.substring(0, 8)}">analysis</span>
+                <button type="button" th:if="${item.storedAnalysis.analysis.completed}"
+                        class="icon-action danger-action"
+                        title="로컬 작업 취소 및 삭제" aria-label="로컬 작업 취소 및 삭제"
+                        th:attr="hx-delete=@{/ui/workflows/{id}(id=${item.storedAnalysis.analysis.identity.analysisId})}"
+                        hx-target="#workflow-list" hx-swap="outerHTML"
+                        hx-confirm="이 분석과 연결된 로컬 hotfix 기록을 삭제할까요? 생성된 Bitbucket PR과 Jenkins 기록은 삭제되지 않습니다.">
+                    ×
+                </button>
+            </div>
+        </div>
+
+        <div class="active-agent" th:if="${!item.storedAnalysis.analysis.completed}">
+            <span class="agent-pulse" aria-hidden="true"></span>
+            <div>
+                <strong>incident-analysis-agent</strong>
+                <small>Jenkins 증거와 소스 문맥에서 독립적인 원인 후보를 분석하고 있습니다.</small>
+            </div>
+        </div>
+
+        <div th:if="${item.storedAnalysis.analysis.completed and #lists.isEmpty(item.candidateWorkflows)}"
+             class="empty-state">분석에서 수정 가능한 원인 후보를 찾지 못했습니다.</div>
+
+        <section th:each="work : ${item.candidateWorkflows}" class="candidate-workflow"
+                 th:with="hotfix=${work.hotfix}">
+            <div class="candidate-workflow-head">
+                <div class="card-title-row">
+                    <span class="confidence" th:text="|${work.candidate.confidencePercent}%|">90%</span>
+                    <h3 th:text="${work.candidate.title}">candidate</h3>
+                    <span th:if="${hotfix != null}" class="status"
+                          th:classappend="${hotfix.progress.status}"
+                          th:text="${hotfix.progress.status}">PATCHING</span>
+                </div>
+                <p class="candidate-summary" th:text="${work.candidate.rootCause}">root cause</p>
+                <button type="button" class="detail-action"
+                        th:attr="data-modal-open=|candidate-detail-${item.storedAnalysis.analysis.identity.analysisId}-${work.candidate.candidateId}|">
+                    Details
+                </button>
+                <form class="candidate-refinement-form"
+                      th:attr="hx-post=@{/ui/analyses/{analysisId}/candidates/{candidateId}/refinement(
+                          analysisId=${item.storedAnalysis.analysis.identity.analysisId},
+                          candidateId=${work.candidate.candidateId})}"
+                      hx-target="closest .workflow-card" hx-swap="outerHTML"
+                      hx-disabled-elt="button" data-agent-request="candidate-refinement-agent">
+                    <input type="hidden" name="analysisVersion"
+                           th:value="${item.storedAnalysis.analysis.identity.version}">
+                    <button type="submit" class="detail-action refinement-request-button">
+                        <span>정밀 AI 분석</span><i aria-hidden="true"></i>
+                    </button>
+                </form>
+            </div>
+
+            <dialog class="detail-modal"
+                    th:id="|candidate-detail-${item.storedAnalysis.analysis.identity.analysisId}-${work.candidate.candidateId}|">
+                <div class="detail-modal-head">
+                    <div>
+                        <span class="eyebrow">ANALYSIS CANDIDATE</span>
+                        <h3 th:text="${work.candidate.title}">candidate</h3>
+                    </div>
+                    <button type="button" class="modal-close" data-modal-close aria-label="상세 닫기">×</button>
+                </div>
+                <dl class="detail-list">
+                    <div><dt>신뢰도</dt><dd th:text="|${work.candidate.confidencePercent}%|">90%</dd></div>
+                    <div><dt>상세 원인</dt><dd th:text="${work.candidate.rootCause}">root cause</dd></div>
+                    <div><dt>대상 소스</dt><dd th:text="${item.storedAnalysis.source.reference}">PR-1301</dd></div>
+                    <div th:if="${item.storedAnalysis.source.commit != null}">
+                        <dt>고정 commit</dt><dd><code th:text="${item.storedAnalysis.source.commit}">commit</code></dd>
+                    </div>
+                    <div><dt>자동 수정 가능 여부</dt>
+                        <dd th:text="${work.candidate.selectable ? '자동 수정 후보' : work.candidate.selectionRestriction}">
+                            자동 수정 후보
+                        </dd>
+                    </div>
+                </dl>
+            </dialog>
+
+            <div class="active-agent"
+                 th:if="${hotfix != null and (hotfix.progress.status == 'SELECTED' or hotfix.progress.status == 'PATCHING' or hotfix.progress.status == 'VERIFYING' or hotfix.progress.status == 'DRAFT_PR_CREATED')}">
+                <span class="agent-pulse" aria-hidden="true"></span>
+                <div>
+                    <strong th:text="${hotfix.progress.stageState.currentActor}">patch-author-agent</strong>
+                    <span class="recovery-state"
+                          th:if="${#strings.contains(hotfix.progress.message, '서버 재기동')}">
+                        RESTART RECOVERY
+                    </span>
+                    <small th:text="|${hotfix.progress.stageState.stageLabel} · ${hotfix.progress.message}|"></small>
+                </div>
+            </div>
+            <div class="active-agent complete" th:if="${hotfix != null and hotfix.progress.status == 'RESOLVED'}">
+                <span class="agent-pulse" aria-hidden="true"></span>
+                <div><strong>Issue_Resolved</strong><small>이 원인의 Jenkins CI까지 완료되었습니다.</small></div>
+            </div>
+            <div class="active-agent stopped"
+                 th:if="${hotfix != null and (hotfix.progress.status == 'NEEDS_HUMAN_REVIEW' or hotfix.progress.status == 'FAILED')}">
+                <span aria-hidden="true"></span>
+                <div>
+                    <strong th:text="${hotfix.progress.status == 'FAILED' ? '작업 실패' : '사람 검토 대기'}">작업 중단</strong>
+                    <small th:text="${hotfix.progress.message}">중단 사유</small>
+                </div>
+            </div>
+
+            <section th:if="${hotfix != null and hotfix.progress.failure != null}"
+                     class="failure-detail" aria-label="실패 상세">
+                <div class="failure-detail-head">
+                    <div>
+                        <span class="eyebrow">FAILED STAGE</span>
+                        <strong th:text="${hotfix.progress.failure.stageLabel}">집중 빌드·테스트</strong>
+                    </div>
+                    <code th:text="${hotfix.progress.failure.code}">FAILURE_CODE</code>
+                </div>
+                <p th:text="${hotfix.progress.failure.message}">실패 메시지</p>
+                <p class="recovery-guide" th:text="${hotfix.progress.failure.recoveryGuide}">
+                    복구 방법
+                </p>
+
+                <div th:if="${hotfix.progress.failure.humanFixAvailable}" class="human-review-flow">
+                    <div>
+                        <span class="eyebrow">HUMAN REVIEW</span>
+                        <strong th:text="${hotfix.progress.branchName}">agent/hotfix/example</strong>
+                    </div>
+                    <form th:if="${hotfix.links.reviewBranchUrl == null}"
+                          th:attr="hx-post=@{/ui/hotfixes/{id}/human-review-branch(id=${hotfix.identity.hotfixId})}"
+                          hx-target="#workflow-list" hx-swap="outerHTML"
+                          hx-disabled-elt="button">
+                        <button type="submit" class="stage-action">사람 검토 branch 게시</button>
+                    </form>
+                    <div th:if="${hotfix.links.reviewBranchUrl != null}" class="human-review-published">
+                        <a th:href="${hotfix.links.reviewBranchUrl}" target="_blank"
+                           rel="noopener noreferrer">Bitbucket branch에서 수정 ↗</a>
+                        <ol>
+                            <li><code th:text="|git fetch origin ${hotfix.progress.branchName}|">git fetch</code></li>
+                            <li><code th:text="|git switch ${hotfix.progress.branchName}|">git switch</code></li>
+                            <li>코드를 검토·수정하고 commit 후 같은 branch에 push</li>
+                            <li>아래 버튼으로 원격 commit을 다시 가져와 전체 가드레일 검증</li>
+                        </ol>
+                        <form th:attr="hx-post=@{/ui/hotfixes/{id}/human-changes-verification(id=${hotfix.identity.hotfixId})}"
+                              hx-target="#workflow-list" hx-swap="outerHTML"
+                              hx-disabled-elt="button">
+                            <button type="submit" class="stage-action">수정 commit 다시 불러와 검증</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <section th:if="${hotfix != null and !#lists.isEmpty(hotfix.progress.verifications)}"
+                     class="verification-results" aria-label="검증 결과">
+                <div class="verification-title">
+                    <span class="eyebrow">VERIFICATION RESULTS</span>
+                    <strong>실행된 빌드·테스트</strong>
+                </div>
+                <details th:each="verification : ${hotfix.progress.verifications}"
+                         th:classappend="${verification.passed ? 'passed' : 'failed'}">
+                    <summary>
+                        <span th:text="${verification.passed ? 'PASS' : 'FAIL'}">PASS</span>
+                        <strong th:text="${verification.name}">test</strong>
+                        <code th:text="|exit ${verification.exitCode}|">exit 0</code>
+                        <small th:text="${verification.required ? '필수' : '선택'}">필수</small>
+                    </summary>
+                    <pre th:if="${verification.summary != null and !verification.summary.isBlank()}"
+                         th:text="${verification.summary}">검증 출력 요약</pre>
+                    <p th:if="${verification.summary == null or verification.summary.isBlank()}">
+                        저장된 출력 요약이 없습니다.
+                    </p>
+                </details>
+            </section>
+
+            <ol class="unified-workflow-steps">
+                <li th:classappend="${item.storedAnalysis.analysis.status == 'CANDIDATES_READY' ? 'done' : (item.storedAnalysis.analysis.completed ? 'blocked' : 'active')}">
+                    <span>1</span><strong>분석</strong><small>incident-analysis-agent</small>
+                    <div th:if="${!item.storedAnalysis.analysis.completed}" class="stage-runtime">
+                        <div class="stage-progress-track" aria-label="분석 진행 중"><i></i></div>
+                        <div class="stage-runtime-head">
+                            <strong>원인 분석</strong>
+                            <time th:text="${item.storedAnalysis.elapsedLabel}">1분 미만</time>
+                        </div>
+                        <small>현재 실행 · incident-analysis-agent</small>
+                    </div>
+                </li>
+                <li th:classappend="${hotfix == null ? '' : ((hotfix.progress.status == 'FAILED' or hotfix.progress.status == 'NEEDS_HUMAN_REVIEW') and hotfix.progress.currentStep == 2 ? 'blocked' : (hotfix.progress.currentStep >= 3 ? 'done' : 'active'))}">
+                    <span>2</span><strong>Draft PR 생성</strong><small>patch-author-agent</small>
+                    <div th:if="${hotfix != null and (hotfix.progress.status == 'SELECTED' or hotfix.progress.status == 'PATCHING')}"
+                         class="stage-runtime">
+                        <div class="stage-progress-track" aria-label="Draft PR 생성 진행 중"><i></i></div>
+                        <div class="stage-runtime-head">
+                            <strong th:text="${hotfix.progress.stageState.stageLabel}">수정 코드 생성</strong>
+                            <time th:text="${hotfix.progress.stageState.elapsedLabel}">1분 미만</time>
+                        </div>
+                        <div th:if="${!#lists.isEmpty(hotfix.progress.stageState.pipelineStages)}"
+                             class="pipeline-flow" aria-label="로컬 검증 단계">
+                            <div th:each="pipelineStage : ${hotfix.progress.stageState.pipelineStages}"
+                                 class="pipeline-node" th:classappend="${pipelineStage.status}"
+                                 th:title="${pipelineStage.detail}">
+                                <span th:text="${pipelineStage.status == 'SUCCESS' ? '✓' :
+                                    (pipelineStage.status == 'FAILED' ? '×' :
+                                    (pipelineStage.status == 'IN_PROGRESS' ? '›' : '○'))}">○</span>
+                                <strong th:text="${pipelineStage.name}">검증 단계</strong>
+                                <time th:if="${!pipelineStage.durationLabel.isBlank()}"
+                                      th:text="${pipelineStage.durationLabel}">1분</time>
+                            </div>
+                        </div>
+                        <small th:if="${#lists.isEmpty(hotfix.progress.stageState.pipelineStages)}"
+                               th:text="|현재 실행 · ${hotfix.progress.stageState.currentActor}|">
+                            현재 실행 주체
+                        </small>
+                    </div>
+                    <form th:if="${hotfix != null and (hotfix.progress.status == 'SELECTED' or hotfix.progress.status == 'PATCHING')}"
+                          th:attr="hx-delete=@{/ui/hotfixes/{id}(id=${hotfix.identity.hotfixId})}"
+                          hx-target="#workflow-list" hx-swap="outerHTML"
+                          hx-confirm="진행 중인 수정 작업을 취소하고 로컬 기록을 삭제할까요?">
+                        <button type="submit" class="stage-action danger-action">취소</button>
+                    </form>
+                    <form th:if="${hotfix != null and (hotfix.progress.status == 'FAILED' or hotfix.progress.status == 'NEEDS_HUMAN_REVIEW') and hotfix.progress.currentStep == 2}"
+                          th:attr="hx-post=@{/ui/hotfixes/{id}/restarts(id=${hotfix.identity.hotfixId})}"
+                          hx-target="#workflow-list" hx-swap="outerHTML">
+                        <button type="submit" class="stage-action">가드레일부터 재시작</button>
+                    </form>
+                </li>
+                <li th:classappend="${hotfix == null or hotfix.progress.currentStep < 3 ? '' : ((hotfix.progress.status == 'FAILED' or hotfix.progress.status == 'NEEDS_HUMAN_REVIEW') ? 'blocked' : (hotfix.progress.currentStep >= 4 ? 'done' : 'active'))}">
+                    <span>3</span><strong>Draft PR 빌드</strong><small>로컬 빌드·테스트</small>
+                    <div th:if="${hotfix != null and hotfix.progress.status == 'VERIFYING'}"
+                         class="stage-runtime">
+                        <div class="stage-progress-track" aria-label="로컬 빌드와 테스트 진행 중"><i></i></div>
+                        <div class="stage-runtime-head">
+                            <strong th:text="${hotfix.progress.stageState.stageLabel}">집중 빌드·테스트</strong>
+                            <time th:text="${hotfix.progress.stageState.elapsedLabel}">1분 미만</time>
+                        </div>
+                        <div th:if="${!#lists.isEmpty(hotfix.progress.stageState.pipelineStages)}"
+                             class="pipeline-flow" aria-label="로컬 검증 단계">
+                            <div th:each="pipelineStage : ${hotfix.progress.stageState.pipelineStages}"
+                                 class="pipeline-node" th:classappend="${pipelineStage.status}"
+                                 th:title="${pipelineStage.detail}">
+                                <span th:text="${pipelineStage.status == 'SUCCESS' ? '✓' :
+                                    (pipelineStage.status == 'FAILED' ? '×' :
+                                    (pipelineStage.status == 'IN_PROGRESS' ? '›' : '○'))}">○</span>
+                                <strong th:text="${pipelineStage.name}">검증 단계</strong>
+                                <time th:if="${!pipelineStage.durationLabel.isBlank()}"
+                                      th:text="${pipelineStage.durationLabel}">1분</time>
+                            </div>
+                        </div>
+                        <small th:if="${#lists.isEmpty(hotfix.progress.stageState.pipelineStages)}"
+                               th:text="|현재 실행 · ${hotfix.progress.stageState.currentActor}|">
+                            현재 실행 주체
+                        </small>
+                    </div>
+                    <form th:if="${hotfix != null and hotfix.progress.status == 'VERIFYING'}"
+                          th:attr="hx-delete=@{/ui/hotfixes/{id}(id=${hotfix.identity.hotfixId})}"
+                          hx-target="#workflow-list" hx-swap="outerHTML"
+                          hx-confirm="진행 중인 로컬 검증을 취소하고 이 hotfix 기록을 삭제할까요?">
+                        <button type="submit" class="stage-action danger-action">취소</button>
+                    </form>
+                    <form th:if="${hotfix != null and (hotfix.progress.status == 'FAILED' or hotfix.progress.status == 'NEEDS_HUMAN_REVIEW') and hotfix.progress.currentStep == 3}"
+                          th:attr="hx-post=@{/ui/hotfixes/{id}/restarts(id=${hotfix.identity.hotfixId})}"
+                          hx-target="#workflow-list" hx-swap="outerHTML">
+                        <button type="submit" class="stage-action">가드레일부터 재시작</button>
+                    </form>
+                </li>
+                <li th:classappend="${hotfix == null or hotfix.progress.currentStep < 4 ? '' : (hotfix.progress.status == 'RESOLVED' ? 'done' : 'active')}">
+                    <span>4</span><strong>Draft PR CI 빌드</strong><small>Jenkins</small>
+                    <div th:if="${hotfix != null and hotfix.progress.status == 'DRAFT_PR_CREATED'}"
+                         class="stage-runtime">
+                        <div class="stage-progress-track" aria-label="Jenkins CI 진행 중"><i></i></div>
+                        <div class="stage-runtime-head">
+                            <strong th:text="${hotfix.progress.stageState.stageLabel}">Draft PR Jenkins CI</strong>
+                            <time th:text="${hotfix.progress.stageState.elapsedLabel}">1분 미만</time>
+                        </div>
+                        <div th:if="${!#lists.isEmpty(hotfix.progress.stageState.pipelineStages)}"
+                             class="pipeline-flow" aria-label="Jenkins Pipeline 단계">
+                            <div th:each="pipelineStage : ${hotfix.progress.stageState.pipelineStages}"
+                                 class="pipeline-node" th:classappend="${pipelineStage.status}"
+                                 th:title="${pipelineStage.detail}">
+                                <span th:text="${pipelineStage.status == 'SUCCESS' ? '✓' :
+                                    (pipelineStage.status == 'FAILED' ? '×' :
+                                    (pipelineStage.status == 'IN_PROGRESS' ? '›' : '○'))}">○</span>
+                                <strong th:text="${pipelineStage.name}">Jenkins stage</strong>
+                                <time th:if="${!pipelineStage.durationLabel.isBlank()}"
+                                      th:text="${pipelineStage.durationLabel}">1분</time>
+                            </div>
+                        </div>
+                        <small th:if="${#lists.isEmpty(hotfix.progress.stageState.pipelineStages)}">
+                            Jenkins 상세 단계 수집 대기
+                        </small>
+                    </div>
+                    <div th:if="${hotfix != null and hotfix.progress.currentStep >= 4}" class="stage-links">
+                        <a th:if="${hotfix.links.draftPullRequestUrl != null}"
+                           th:href="${hotfix.links.draftPullRequestUrl}" target="_blank"
+                           rel="noopener noreferrer">Draft PR ↗</a>
+                        <a th:if="${hotfix.links.ciBuildUrl != null}" th:href="${hotfix.links.ciBuildUrl}"
+                           target="_blank" rel="noopener noreferrer">Jenkins ↗</a>
+                    </div>
+                    <form th:if="${hotfix != null and hotfix.progress.status == 'DRAFT_PR_CREATED'}"
+                          th:attr="hx-post=@{/ui/hotfixes/{id}/ci-refresh(id=${hotfix.identity.hotfixId})}"
+                          hx-target="#workflow-list" hx-swap="outerHTML">
+                        <button type="submit" class="stage-action">CI 상태 갱신</button>
+                    </form>
+                </li>
+            </ol>
+
+            <form th:if="${hotfix == null and work.candidate.selectable}"
+                  th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${item.storedAnalysis.analysis.identity.analysisId})}"
+                  hx-target="closest .workflow-card" hx-indicator="this" hx-swap="outerHTML">
+                <input type="hidden" name="analysisVersion" th:value="${item.storedAnalysis.analysis.identity.version}">
+                <input type="hidden" name="candidateId" th:value="${work.candidate.candidateId}">
+                <input type="hidden" name="idempotencyKey"
+                       th:value="|dashboard-selection-${item.storedAnalysis.analysis.identity.analysisId}-${work.candidate.candidateId}|">
+                <input type="hidden" name="cardOnly" value="true">
+                <button type="submit" class="primary">이 원인만 Draft PR로 수정</button>
+            </form>
+            <div th:if="${hotfix == null and !work.candidate.selectable}" class="selection-restriction">
+                <strong>Draft PR 생성 불가</strong>
+                <span th:text="${work.candidate.selectionRestriction}">선택 불가 사유</span>
+            </div>
+
+        </section>
+    </article>
+</div>

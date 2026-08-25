@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260824-02-hotfix-failure-detail
+      author: dykim
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/20260824-hotfix-failure-detail.sql
+            splitStatements: true
+            stripComments: true

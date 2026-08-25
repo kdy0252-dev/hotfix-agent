@@ -1,0 +1,33 @@
+<div class="analysis-action" th:id="|analysis-action-${jenkinsPullRequestId}|"
+     th:attr="data-completed-analysis-id=${analysisCompleted ? analysisId : null},
+              hx-get=${analysisCompleted ? null : analysisStatusUrl},
+              hx-trigger=${analysisCompleted ? null : 'load delay:1s, every 2s'},
+              hx-target=${analysisCompleted ? null : 'this'},
+              hx-swap=${analysisCompleted ? null : 'outerHTML'}"
+     xmlns:th="http://www.thymeleaf.org">
+    <form th:if="${analysisCompleted}" class="inline-analysis-form"
+          hx-post="/ui/analyses/jenkins"
+          th:attr="hx-target=|#analysis-action-${jenkinsPullRequestId}|"
+          hx-swap="outerHTML" hx-disabled-elt="button"
+          data-agent-request="incident-analysis-agent">
+        <input type="hidden" name="jobPath" th:value="${jenkinsJobPath}">
+        <input type="hidden" name="buildNumber" th:value="${jenkinsBuildNumber}">
+        <input type="hidden" name="pullRequestId" th:value="${jenkinsPullRequestId}">
+        <input type="hidden" name="idempotencyKey" th:value="${jenkinsIdempotencyKey}">
+        <input type="hidden" name="force" value="true">
+        <button type="submit" class="small-action analysis-request-button duplicate-request">
+            <span class="analysis-button-label">중복 요청 재분석</span>
+            <span class="analysis-button-loading">재분석 요청 중…</span>
+            <i aria-hidden="true"></i>
+        </button>
+    </form>
+
+    <button th:unless="${analysisCompleted}" type="button"
+            class="small-action analysis-request-button analysis-running" disabled>
+        <span class="agent-pulse" aria-hidden="true"></span>
+        <span th:text="${duplicateRequest ? '동일 요청 분석 진행 중…' : 'AI 분석 진행 중…'}">
+            AI 분석 진행 중…
+        </span>
+        <i aria-hidden="true"></i>
+    </button>
+</div>

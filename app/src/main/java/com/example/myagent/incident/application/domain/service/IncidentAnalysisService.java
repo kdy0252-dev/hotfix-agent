@@ -7,6 +7,7 @@ import com.example.myagent.incident.application.domain.service.internal.Incident
 import com.example.myagent.incident.application.domain.service.support.IncidentRequestHash;
 import com.example.myagent.incident.application.port.in.AnalyzeIncidentUseCase;
 import com.example.myagent.incident.application.port.in.IncidentUseCaseException;
+import com.example.myagent.incident.application.port.in.RecoverAnalysisUseCase;
 import com.example.myagent.incident.application.port.out.IncidentFailure;
 import com.example.myagent.incident.application.port.out.IncidentStatePort;
 import com.example.myagent.incident.application.port.out.IncidentStatePort.AnalysisEnvelope;
@@ -18,8 +19,9 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
 @Service
-public class IncidentAnalysisService implements AnalyzeIncidentUseCase {
+public class IncidentAnalysisService implements AnalyzeIncidentUseCase, RecoverAnalysisUseCase {
     private static final int SCHEMA_VERSION = 1;
+    private static final Duration MAX_OBSERVATION_RANGE = Duration.ofDays(31);
 
     private final IncidentAnalysisExecutor executor;
     private final IncidentStatePort statePort;
@@ -48,6 +50,28 @@ public class IncidentAnalysisService implements AnalyzeIncidentUseCase {
         return analyze(command.request(), command.idempotencyKey());
     }
 
+    @Override
+    public int recoverInterruptedAnalyses() {
+        var interrupted = statePort.findIncompleteAnalyses()
+            .getOrElseThrow(this::failure)
+            .stream()
+            .toList();
+        interrupted.forEach(this::recover);
+        return interrupted.size();
+    }
+
+    private void recover(AnalysisEnvelope envelope) {
+        if (envelope.request() != null) {
+            submit(envelope.request(), envelope);
+            return;
+        }
+        var exception = new IncidentUseCaseException(
+            "ANALYSIS_RECOVERY_REQUEST_MISSING",
+            "서버 재기동 후 분석을 복구할 원본 요청 정보가 없습니다. 다시 분석을 요청하세요."
+        );
+        save(envelope, executor.failed(envelope.session(), exception));
+    }
+
     private synchronized AnalysisSession analyze(
         AnalysisRequest request,
         String idempotencyKey
@@ -70,7 +94,8 @@ public class IncidentAnalysisService implements AnalyzeIncidentUseCase {
             SCHEMA_VERSION,
             idempotencyKey,
             requestHash,
-            requested
+            requested,
+            request
         );
         AnalysisSession saved = statePort.saveAnalysis(envelope).getOrElseThrow(this::failure);
         submit(request, envelope);
@@ -112,7 +137,8 @@ public class IncidentAnalysisService implements AnalyzeIncidentUseCase {
             envelope.schemaVersion(),
             envelope.idempotencyKey(),
             envelope.requestHash(),
-            session
+            session,
+            envelope.request()
         )).getOrElseThrow(this::failure);
     }
 
@@ -163,8 +189,8 @@ public class IncidentAnalysisService implements AnalyzeIncidentUseCase {
         }
         Duration duration = Duration.between(range.startAt(), range.endAt());
         if (duration.isNegative() || duration.isZero()
-            || duration.compareTo(Duration.ofHours(1)) > 0) {
-            throw invalidRequest("관측 범위는 1초 이상 60분 이하여야 합니다.");
+            || duration.compareTo(MAX_OBSERVATION_RANGE) > 0) {
+            throw invalidRequest("관측 범위는 1초 이상 31일 이하여야 합니다.");
         }
     }
 

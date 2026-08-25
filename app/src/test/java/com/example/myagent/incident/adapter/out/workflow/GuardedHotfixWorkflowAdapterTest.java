@@ -26,6 +26,7 @@ import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifac
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.Publication;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.Review;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.Workspace;
+import com.example.myagent.incident.application.port.out.HotfixWorkflowPort;
 import com.example.myagent.incident.application.port.out.PatchProposalPort;
 import com.example.myagent.incident.application.port.out.PatchReviewPort;
 import com.example.myagent.incident.application.port.out.PatchWorkspacePort;
@@ -35,6 +36,7 @@ import io.vavr.control.Either;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,13 +90,29 @@ class GuardedHotfixWorkflowAdapterTest {
             "https://jenkins.example/job/PR-1/"
         )));
 
-        HotfixResource result = workflow.execute(analysis(), candidate(), HOTFIX_ID).get();
+        var progressUpdates = new ArrayList<HotfixWorkflowPort.ProgressUpdate>();
+        HotfixResource result = workflow.execute(
+            analysis(),
+            candidate(),
+            HOTFIX_ID,
+            progressUpdates::add,
+            () -> false
+        ).get();
 
         assertThat(result.progress().status()).isEqualTo(HotfixResource.Status.DRAFT_PR_CREATED);
         assertThat(result.progress().verification().provenance().patchCommit())
             .isEqualTo(PATCH_COMMIT);
         assertThat(result.publication().draftPullRequestUrl())
             .isEqualTo("https://bitbucket.example/pr/1");
+        assertThat(progressUpdates).extracting(HotfixWorkflowPort.ProgressUpdate::stage)
+            .containsExactly(
+                HotfixResource.WorkflowStage.WORKSPACE_PREPARATION,
+                HotfixResource.WorkflowStage.PATCH_GENERATION,
+                HotfixResource.WorkflowStage.FOCUSED_VERIFICATION,
+                HotfixResource.WorkflowStage.CODE_REVIEW,
+                HotfixResource.WorkflowStage.PARITY_VERIFICATION,
+                HotfixResource.WorkflowStage.DRAFT_PR_PUBLICATION
+            );
         verify(pullRequestPort).publishDraft(any());
     }
 
@@ -109,11 +127,103 @@ class GuardedHotfixWorkflowAdapterTest {
         when(reviewPort.review(candidate(), patch)).thenReturn(Either.right(approvedReview()));
         when(verificationPort.runParity(patch, 1)).thenReturn(Either.right(parity(false)));
 
-        HotfixResource result = workflow.execute(analysis(), candidate(), HOTFIX_ID).get();
+        HotfixResource result = workflow.execute(
+            analysis(),
+            candidate(),
+            HOTFIX_ID,
+            progressUpdate -> { },
+            () -> false
+        ).get();
 
         assertThat(result.progress().status()).isEqualTo(HotfixResource.Status.NEEDS_HUMAN_REVIEW);
         assertThat(result.progress().humanReviewReason()).contains("parity");
         verify(pullRequestPort, never()).publishDraft(any());
+    }
+
+    @Test
+    void retainsTheLastFailedVerificationForHumanDiagnosis() {
+        Workspace workspace = workspace();
+        AppliedPatch patch = patch(workspace);
+        when(workspacePort.prepare(any(), any(), any())).thenReturn(Either.right(workspace));
+        when(proposalPort.propose(any())).thenReturn(Either.right(proposal()));
+        when(workspacePort.apply(any(), any())).thenReturn(Either.right(patch));
+        when(verificationPort.runFocused(any(), any(Integer.class)))
+            .thenAnswer(invocation -> Either.right(focused(false)));
+        when(workspacePort.refresh(any())).thenReturn(Either.right(workspace));
+
+        HotfixResource result = workflow.execute(
+            analysis(), candidate(), HOTFIX_ID, progressUpdate -> { }, () -> false
+        ).get();
+
+        assertThat(result.progress().failure().stage())
+            .isEqualTo(HotfixResource.WorkflowStage.FOCUSED_VERIFICATION);
+        assertThat(result.progress().verification().stages())
+            .extracting(StageResult::summary)
+            .containsExactly("focused");
+        verify(pullRequestPort, never()).publishDraft(any());
+    }
+
+    @Test
+    void doesNotPublishADraftAfterCancellation() {
+        var result = workflow.execute(
+            analysis(),
+            candidate(),
+            HOTFIX_ID,
+            progressUpdate -> { },
+            () -> true
+        );
+
+        assertThat(result.getLeft().code()).isEqualTo("HOTFIX_CANCELLED");
+        verify(pullRequestPort, never()).publishDraft(any());
+    }
+
+    @Test
+    void publishesAnExistingAgentBranchForHumanReview() {
+        var hotfix = needsReviewHotfix(null);
+        when(workspacePort.publishForHumanReview(
+            analysis(), candidate(), HOTFIX_ID, workspace().branchName()
+        )).thenReturn(Either.right(new PatchWorkspacePort.ReviewBranch(
+            workspace().branchName(),
+            "https://bitbucket.example/branch/agent-hotfix",
+            PATCH_COMMIT
+        )));
+
+        HotfixResource result = workflow.publishForHumanReview(
+            analysis(), candidate(), hotfix
+        ).get();
+
+        assertThat(result.publication().reviewBranchUrl())
+            .isEqualTo("https://bitbucket.example/branch/agent-hotfix");
+        assertThat(result.progress()).isEqualTo(hotfix.progress());
+    }
+
+    @Test
+    void reloadsAHumanCommitAndRunsEveryGateBeforePublishingDraft() {
+        var hotfix = needsReviewHotfix("https://bitbucket.example/branch/agent-hotfix");
+        AppliedPatch patch = patch(workspace());
+        when(workspacePort.reloadHumanChanges(
+            analysis(), candidate(), HOTFIX_ID, workspace().branchName()
+        )).thenReturn(Either.right(patch));
+        when(verificationPort.runFocused(patch, 1)).thenReturn(Either.right(focused(true)));
+        when(reviewPort.review(candidate(), patch)).thenReturn(Either.right(approvedReview()));
+        when(verificationPort.runParity(patch, 1)).thenReturn(Either.right(parity(true)));
+        when(workspacePort.currentHead(workspace())).thenReturn(Either.right(PATCH_COMMIT));
+        when(pullRequestPort.publishDraft(any())).thenReturn(Either.right(new Publication(
+            "https://bitbucket.example/pr/1",
+            "https://jenkins.example/job/PR-1/"
+        )));
+
+        HotfixResource result = workflow.verifyHumanChanges(
+            analysis(), candidate(), hotfix, progressUpdate -> { }, () -> false
+        ).get();
+
+        assertThat(result.progress().status()).isEqualTo(HotfixResource.Status.DRAFT_PR_CREATED);
+        assertThat(result.publication().reviewBranchUrl())
+            .isEqualTo("https://bitbucket.example/branch/agent-hotfix");
+        verify(verificationPort).runFocused(patch, 1);
+        verify(reviewPort).review(candidate(), patch);
+        verify(verificationPort).runParity(patch, 1);
+        verify(pullRequestPort).publishDraft(any());
     }
 
     private AnalysisSession analysis() {
@@ -187,7 +297,7 @@ class GuardedHotfixWorkflowAdapterTest {
             1,
             "base123",
             PATCH_COMMIT,
-            List.of(new StageResult("focused-gradle", passed ? 0 : 1, true))
+            List.of(new StageResult("focused-gradle", passed ? 0 : 1, true, "focused"))
         );
     }
 
@@ -199,11 +309,37 @@ class GuardedHotfixWorkflowAdapterTest {
                 PATCH_COMMIT,
                 new JenkinsfileProfile("eu/Jenkinsfile", "jenkins-hash", 1)
             ),
-            List.of(new StageResult("jenkins-gradle-verification", passed ? 0 : 1, true))
+            List.of(new StageResult(
+                "jenkins-gradle-verification",
+                passed ? 0 : 1,
+                true,
+                "parity"
+            ))
         );
     }
 
     private Review approvedReview() {
         return new Review(true, "Approved", List.of());
+    }
+
+    private HotfixResource needsReviewHotfix(String reviewBranchUrl) {
+        return new HotfixResource(
+            new HotfixResource.Identity(HOTFIX_ID, "analysis-1", "candidate-1"),
+            new HotfixResource.Progress(
+                new HotfixResource.WorkflowState(
+                    HotfixResource.Status.NEEDS_HUMAN_REVIEW,
+                    workspace().branchName(),
+                    null,
+                    new HotfixResource.FailureDetail(
+                        HotfixResource.WorkflowStage.CODE_REVIEW,
+                        "PATCH_REVIEW_REJECTED",
+                        "사람 검토 필요"
+                    )
+                ),
+                HotfixResource.ChangeMetrics.empty(),
+                Verification.empty()
+            ),
+            HotfixResource.Publication.forHumanReview(reviewBranchUrl)
+        );
     }
 }

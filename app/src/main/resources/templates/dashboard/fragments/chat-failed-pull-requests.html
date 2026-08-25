@@ -1,0 +1,22 @@
+<div class="chat-list-response" xmlns:th="http://www.thymeleaf.org">
+    <div class="chat-message assistant">
+        <strong>최근 실패한 PR 목록입니다.</strong>
+        <span th:text="|Jenkins에서 확인된 실패 빌드 ${#lists.size(pullRequests)}건을 찾았습니다.|">
+            실패 빌드를 찾았습니다.
+        </span>
+    </div>
+    <div th:if="${#lists.isEmpty(pullRequests)}" class="chat-message assistant">
+        현재 확인되는 실패 PR이 없습니다.
+    </div>
+    <article th:each="item : ${pullRequests}" class="chat-candidate failed-pr-chat-card">
+        <div>
+            <span class="status" th:text="${item.build.result}">FAILURE</span>
+            <strong th:text="|PR-${item.pullRequest.number} · ${item.branch.name}|">PR</strong>
+        </div>
+        <small th:text="|Jenkins build #${item.build.number} · ${item.build.timestamp}|">build</small>
+        <div class="chat-result-links">
+            <a th:href="${item.pullRequest.url}" target="_blank" rel="noopener noreferrer">Bitbucket ↗</a>
+            <a th:href="${item.build.url}" target="_blank" rel="noopener noreferrer">Jenkins ↗</a>
+        </div>
+    </article>
+</div>

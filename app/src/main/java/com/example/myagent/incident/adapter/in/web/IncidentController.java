@@ -9,6 +9,7 @@ import com.example.myagent.incident.application.port.in.AnalyzeIncidentUseCase;
 import com.example.myagent.incident.application.port.in.AnalyzeIncidentUseCase.AnalysisCommand;
 import com.example.myagent.incident.application.port.in.QueryAnalysisUseCase;
 import com.example.myagent.incident.application.port.in.QueryHotfixUseCase;
+import com.example.myagent.incident.application.port.in.RefineCandidateUseCase;
 import com.example.myagent.incident.application.port.in.SelectCandidateUseCase;
 import com.example.myagent.incident.application.port.in.SelectCandidateUseCase.SelectionCommand;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,17 +41,20 @@ public class IncidentController {
     private final QueryAnalysisUseCase queryAnalysisUseCase;
     private final SelectCandidateUseCase selectCandidateUseCase;
     private final QueryHotfixUseCase queryHotfixUseCase;
+    private final RefineCandidateUseCase refineCandidateUseCase;
 
     public IncidentController(
         AnalyzeIncidentUseCase analyzeUseCase,
         QueryAnalysisUseCase queryAnalysisUseCase,
         SelectCandidateUseCase selectCandidateUseCase,
-        QueryHotfixUseCase queryHotfixUseCase
+        QueryHotfixUseCase queryHotfixUseCase,
+        RefineCandidateUseCase refineCandidateUseCase
     ) {
         this.analyzeUseCase = analyzeUseCase;
         this.queryAnalysisUseCase = queryAnalysisUseCase;
         this.selectCandidateUseCase = selectCandidateUseCase;
         this.queryHotfixUseCase = queryHotfixUseCase;
+        this.refineCandidateUseCase = refineCandidateUseCase;
     }
 
     @PostMapping("/analyses/jenkins")
@@ -123,6 +127,22 @@ public class IncidentController {
         ));
     }
 
+    @PostMapping("/analyses/{analysisId}/candidates/{candidateId}/refinement")
+    @Operation(summary = "Recheck one candidate against fresh evidence and bounded source")
+    public ResponseEntity<AnalysisSession> refineCandidate(
+        @PathVariable @NotBlank String analysisId,
+        @PathVariable @NotBlank String candidateId,
+        @Valid @RequestBody CandidateRefinementRequest request
+    ) {
+        return ResponseEntity.ok(refineCandidateUseCase.refine(
+            new RefineCandidateUseCase.RefinementCommand(
+                analysisId,
+                request.analysisVersion(),
+                candidateId
+            )
+        ));
+    }
+
     @GetMapping("/hotfixes/{hotfixId}")
     @Operation(summary = "Get patch, verification, Draft PR and CI status")
     public ResponseEntity<HotfixResource> getHotfix(
@@ -158,6 +178,9 @@ public class IncidentController {
         @NotBlank String candidateId,
         @Positive long analysisVersion
     ) {
+    }
+
+    public record CandidateRefinementRequest(@Positive long analysisVersion) {
     }
 
     public record SourceRequest(

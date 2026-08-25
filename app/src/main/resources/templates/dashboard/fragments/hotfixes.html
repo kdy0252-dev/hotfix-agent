@@ -1,0 +1,53 @@
+<div id="hotfix-list" class="hotfix-list" hx-get="/ui/fragments/hotfixes"
+     hx-trigger="every 2s" hx-swap="outerHTML" xmlns:th="http://www.thymeleaf.org">
+    <div th:if="${#lists.isEmpty(hotfixes)}" class="empty-state">
+        아직 실행 중인 hotfix가 없습니다. 자연어 분석에서 후보를 선택하면 여기에 표시됩니다.
+    </div>
+    <article th:each="item : ${hotfixes}" class="hotfix-card">
+        <div class="hotfix-head">
+            <div>
+                <span class="status" th:classappend="${item.progress.status}"
+                      th:text="${item.progress.status}">SELECTED</span>
+                <h3 th:text="${item.progress.branchName ?: 'agent/hotfix 준비 중'}">branch</h3>
+            </div>
+            <span class="mono" th:text="${item.identity.hotfixId.substring(0, 8)}">id</span>
+        </div>
+        <progress max="100" th:value="${item.progress.percent}">20%</progress>
+        <div class="active-agent" th:if="${item.progress.status == 'SELECTED' or item.progress.status == 'PATCHING'}">
+            <span class="agent-pulse" aria-hidden="true"></span>
+            <div>
+                <strong>patch-author-agent</strong>
+                <small>선택된 원인에 맞는 최소 수정안을 작성하고 있습니다.</small>
+            </div>
+        </div>
+        <div class="active-agent" th:if="${item.progress.status == 'VERIFYING'}">
+            <span class="agent-pulse" aria-hidden="true"></span>
+            <div>
+                <strong>patch-review-agent</strong>
+                <small>테스트 결과와 패치를 독립적으로 검토하고 있습니다.</small>
+            </div>
+        </div>
+        <div class="active-agent complete"
+             th:if="${item.progress.status == 'DRAFT_PR_CREATED' or item.progress.status == 'RESOLVED'}">
+            <span class="agent-pulse" aria-hidden="true"></span>
+            <div>
+                <strong>에이전트 작업 완료</strong>
+                <small>Draft PR과 Jenkins CI 상태를 확인하세요.</small>
+            </div>
+        </div>
+        <ol class="workflow-steps">
+            <li th:classappend="${item.progress.currentStep >= 1} ? 'done'">후보 선택</li>
+            <li th:classappend="${item.progress.currentStep >= 2} ? 'done'">Patch</li>
+            <li th:classappend="${item.progress.currentStep >= 3} ? 'done'">검증</li>
+            <li th:classappend="${item.progress.currentStep >= 4} ? 'done'">Draft PR</li>
+            <li th:classappend="${item.progress.currentStep >= 5} ? 'done'">CI 성공</li>
+        </ol>
+        <p class="progress-message" th:text="${item.progress.message}">진행 상태</p>
+        <div class="card-actions" th:if="${item.links.draftPullRequestUrl != null or item.links.ciBuildUrl != null}">
+            <a th:if="${item.links.draftPullRequestUrl != null}" th:href="${item.links.draftPullRequestUrl}"
+               target="_blank" rel="noopener noreferrer">Draft PR ↗</a>
+            <a th:if="${item.links.ciBuildUrl != null}" th:href="${item.links.ciBuildUrl}"
+               target="_blank" rel="noopener noreferrer">Jenkins ↗</a>
+        </div>
+    </article>
+</div>

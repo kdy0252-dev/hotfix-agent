@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260824-03-hotfix-ci-stages
+      author: dykim
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/20260824-hotfix-ci-stages.sql
+            splitStatements: true
+            stripComments: true

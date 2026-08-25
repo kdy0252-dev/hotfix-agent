@@ -1,0 +1,58 @@
+<section class="chat-analysis-shell"
+         th:attr="hx-get=${analysis.completed ? null : '/ui/fragments/chat/analyses/' + analysis.identity.analysisId},
+                  hx-trigger=${analysis.completed ? null : 'every 2s'},
+                  data-completed-analysis-id=${analysis.completed ? analysis.identity.analysisId : null}"
+         hx-target="this" hx-swap="outerHTML" xmlns:th="http://www.thymeleaf.org">
+    <div th:if="${!analysis.completed}" class="chat-message assistant analysis-in-progress">
+        <strong>챗봇 요청을 분석 중입니다.</strong>
+        <small>Jenkins 로그와 대상 소스에서 원인 후보를 찾고 있습니다.</small>
+        <span class="command-progress-bar" aria-hidden="true"><i></i></span>
+    </div>
+
+    <div th:if="${analysis.completed}" class="chat-analysis-result">
+        <div class="chat-message assistant">
+            <strong>요청이 완료되었습니다. PR 분석 결과입니다.</strong>
+            <span th:if="${!#lists.isEmpty(analysis.candidates)}">
+                아래 원인 후보를 확인해 주세요. Draft PR 생성을 진행할까요?
+            </span>
+            <span th:if="${#lists.isEmpty(analysis.candidates)}">
+                자동으로 수정할 수 있는 원인 후보를 찾지 못했습니다.
+            </span>
+        </div>
+        <article th:each="candidate, candidateStat : ${analysis.candidates}"
+                 class="chat-candidate">
+            <div>
+                <span class="confidence" th:text="|${candidate.confidencePercent}%|">90%</span>
+                <strong th:text="|${candidateStat.count}. ${candidate.title}|">1. candidate</strong>
+            </div>
+            <p th:text="${candidate.rootCause}">root cause</p>
+            <details>
+                <summary>Details</summary>
+                <dl class="detail-list compact">
+                    <div><dt>상세 원인</dt><dd th:text="${candidate.rootCause}">root cause</dd></div>
+                    <div><dt>자동 수정</dt>
+                        <dd th:text="${candidate.selectable ? '가능' : candidate.selectionRestriction}">가능</dd>
+                    </div>
+                </dl>
+            </details>
+            <form th:if="${candidate.selectable}"
+                  th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${analysis.identity.analysisId})}"
+                  hx-target="#command-result" hx-swap="innerHTML"
+                  data-chat-confirm-form>
+                <input type="hidden" name="analysisVersion" th:value="${analysis.identity.version}">
+                <input type="hidden" name="candidateId" th:value="${candidate.candidateId}">
+                <input type="hidden" name="idempotencyKey"
+                       th:value="|${selectionIdempotencyKey}-${candidate.candidateId}|">
+                <input type="hidden" name="chatMode" value="true">
+                <button type="submit" class="small-action"
+                        th:text="|${candidateStat.count}번 원인으로 진행|">이 원인으로 진행</button>
+            </form>
+        </article>
+        <small th:if="${analysis.selectableCandidateCount == 1}" class="chat-hint">
+            “응”이라고 입력하면 이 원인으로 진행합니다.
+        </small>
+        <small th:if="${analysis.selectableCandidateCount > 1}" class="chat-hint">
+            수정 가능한 원인이 여러 개입니다. 안전을 위해 원하는 번호의 버튼을 선택해 주세요.
+        </small>
+    </div>
+</section>

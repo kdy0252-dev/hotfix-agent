@@ -1,0 +1,62 @@
+<div id="pull-request-list" class="item-list" data-paginated-list
+     xmlns:th="http://www.thymeleaf.org">
+    <div th:if="${#lists.isEmpty(pullRequests)}" class="empty-state">
+        현재 마지막 빌드가 실패한 open PR이 없습니다.
+    </div>
+    <div th:if="${!#lists.isEmpty(pullRequests)}" class="pagination-toolbar">
+        <label>
+            페이지당
+            <select data-page-size aria-label="페이지당 실패 PR 개수">
+                <option value="5" selected>5개</option>
+                <option value="10">10개</option>
+            </select>
+        </label>
+        <span data-page-status>1 / 1 페이지</span>
+        <div class="page-actions">
+            <button type="button" class="detail-action" data-page-previous>이전</button>
+            <button type="button" class="detail-action" data-page-next>다음</button>
+        </div>
+    </div>
+    <article th:each="item : ${pullRequests}" class="list-card" data-page-item>
+        <div class="card-main">
+            <div class="card-title-row">
+                <span class="status danger">FAILURE</span>
+                <h3 th:text="|PR-${item.pullRequest.number} · ${item.branch.name}|">PR branch</h3>
+            </div>
+            <p class="mono muted" th:text="|${item.branch.commit.substring(0, 12)} · build #${item.build.number}|">
+                commit · build
+            </p>
+            <p class="timestamp" th:text="${item.build.timestamp}">build time</p>
+        </div>
+        <div class="card-actions">
+            <a th:href="${item.pullRequest.url}" target="_blank" rel="noopener noreferrer">Bitbucket ↗</a>
+            <a th:href="${item.build.url}" target="_blank" rel="noopener noreferrer">Jenkins ↗</a>
+            <div class="analysis-action" th:id="|analysis-action-${item.pullRequest.number}|"
+                 th:with="duplicate=${duplicatePullRequestIds.contains(item.pullRequest.number)}">
+                <form class="inline-analysis-form" hx-post="/ui/analyses/jenkins"
+                      th:attr="hx-target=|#analysis-action-${item.pullRequest.number}|"
+                      hx-swap="outerHTML" hx-disabled-elt="button"
+                      data-agent-request="incident-analysis-agent">
+                    <input type="hidden" name="jobPath" th:value="${item.build.jobPath}">
+                    <input type="hidden" name="buildNumber" th:value="${item.build.number}">
+                    <input type="hidden" name="pullRequestId" th:value="${item.pullRequest.number}">
+                    <input type="hidden" name="idempotencyKey"
+                           th:value="|dashboard-jenkins-pr-${item.pullRequest.number}-build-${item.build.number}-commit-${item.branch.commit}|">
+                    <input th:if="${duplicate}" type="hidden" name="force" value="true">
+                    <button type="submit" class="small-action analysis-request-button"
+                            th:classappend="${duplicate ? 'duplicate-request' : ''}">
+                        <span class="analysis-button-label"
+                              th:text="${duplicate ? '중복 요청 재분석' : 'AI 분석 요청'}">
+                            AI 분석 요청
+                        </span>
+                        <span class="analysis-button-loading"
+                              th:text="${duplicate ? '재분석 요청 중…' : '분석 요청 중…'}">
+                            분석 요청 중…
+                        </span>
+                        <i aria-hidden="true"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </article>
+</div>

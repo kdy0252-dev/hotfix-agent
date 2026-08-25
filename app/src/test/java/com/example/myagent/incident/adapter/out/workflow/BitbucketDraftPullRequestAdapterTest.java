@@ -254,10 +254,10 @@ class BitbucketDraftPullRequestAdapterTest {
                 new JenkinsfileProfile("eu/Jenkinsfile", "jenkins-hash", 1)
             ),
             List.of(
-                new StageResult("jenkins-gradle-verification", exitCode, true),
-                new StageResult("jenkins-coverage-report", 0, true),
-                new StageResult("jenkins-image-build", 0, true),
-                new StageResult("jenkins-integration-test", 0, true)
+                new StageResult("jenkins-gradle-verification", exitCode, true, "gradle"),
+                new StageResult("jenkins-coverage-report", 0, true, "coverage"),
+                new StageResult("jenkins-image-build", 0, true, "image"),
+                new StageResult("jenkins-integration-test", 0, true, "integration")
             )
         );
     }

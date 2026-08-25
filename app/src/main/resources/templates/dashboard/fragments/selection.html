@@ -1,0 +1,9 @@
+<div id="workflow-list" class="result-card success-card" xmlns:th="http://www.thymeleaf.org"
+     hx-get="/ui/fragments/workflows" hx-trigger="load delay:500ms" hx-swap="outerHTML">
+    <div class="card-title-row">
+        <span class="status" th:text="${resource.status}">SELECTED</span>
+        <strong>Draft PR workflow가 시작되었습니다.</strong>
+    </div>
+    <p class="mono" th:text="${resource.resourceId}">hotfix id</p>
+    <p>통합 작업 패널에서 패치와 검증 상태를 불러오고 있습니다.</p>
+</div>

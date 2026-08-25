@@ -1,6 +1,7 @@
 package com.example.myagent.incident.adapter.out.workflow;
 
 import com.example.myagent.global.configuration.ParityProfileProperties;
+import com.example.myagent.global.support.SensitiveEvidenceRedactor;
 import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource.JenkinsfileProfile;
 import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource.StageResult;
 import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource.Verification;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Component;
 @Adapter
 @Component
 public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
+    private static final int MAX_STAGE_SUMMARY_CHARACTERS = 2_000;
     private static final Set<String> APP_TASKS = Set.of(
         ":eu:eu-app:architectureTest", ":eu:eu-app:checkstyleMain", ":eu:eu-app:test"
     );
@@ -39,9 +41,14 @@ public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
     );
 
     private final ParityProfileProperties properties;
+    private final SensitiveEvidenceRedactor redactor;
 
-    public LocalJenkinsParityVerificationAdapter(ParityProfileProperties properties) {
+    public LocalJenkinsParityVerificationAdapter(
+        ParityProfileProperties properties,
+        SensitiveEvidenceRedactor redactor
+    ) {
         this.properties = properties;
+        this.redactor = redactor;
     }
 
     @Override
@@ -59,7 +66,12 @@ public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
                 attempt,
                 patch.workspace().baseCommit(),
                 patch.patchCommit(),
-                List.of(new StageResult("focused-gradle", result.exitCode(), true))
+                List.of(new StageResult(
+                    "focused-gradle",
+                    result.exitCode(),
+                    true,
+                    summary(result)
+                ))
             );
         }).toEither().mapLeft(exception -> failure(
             "FOCUSED_VERIFICATION_FAILED",
@@ -196,7 +208,13 @@ public class LocalJenkinsParityVerificationAdapter implements VerificationPort {
             environment,
             Duration.ofMinutes(30)
         );
-        stages.add(new StageResult(name, result.exitCode(), true));
+        stages.add(new StageResult(name, result.exitCode(), true, summary(result)));
+    }
+
+    private String summary(LocalProcessExecutor.Result result) {
+        String redacted = redactor.redact(result.output()).strip();
+        int start = Math.max(0, redacted.length() - MAX_STAGE_SUMMARY_CHARACTERS);
+        return redacted.substring(start);
     }
 
     private List<String> focusedTasks(List<String> changedFiles) {

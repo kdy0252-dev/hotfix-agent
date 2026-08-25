@@ -4,6 +4,7 @@ import com.example.myagent.global.configuration.BitbucketProperties;
 import com.example.myagent.incident.application.domain.model.analysis.SourceRevision;
 import com.example.myagent.incident.application.domain.model.analysis.SourceSpec;
 import com.example.myagent.incident.application.port.out.IncidentFailure;
+import com.example.myagent.incident.application.port.out.PullRequestDashboardPort;
 import com.example.myagent.incident.application.port.out.SourceRevisionPort;
 import io.vavr.control.Either;
 import io.vavr.control.Try;
@@ -20,7 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Adapter
 @Component
-public class BitbucketSourceRevisionAdapter implements SourceRevisionPort {
+public class BitbucketSourceRevisionAdapter implements SourceRevisionPort, PullRequestDashboardPort {
     private final BitbucketProperties properties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -41,6 +42,16 @@ public class BitbucketSourceRevisionAdapter implements SourceRevisionPort {
             "SOURCE_RESOLUTION_FAILED",
             "Bitbucket source branch 또는 PR을 확인하지 못했습니다."
         ));
+    }
+
+    @Override
+    public Either<IncidentFailure, PullRequestDetails> getOpenPullRequest(long pullRequestNumber) {
+        return Try.of(() -> pullRequestDetails(pullRequestNumber))
+            .toEither()
+            .mapLeft(exception -> new IncidentFailure(
+                "PULL_REQUEST_READ_FAILED",
+                "Bitbucket PR 정보를 확인하지 못했습니다."
+            ));
     }
 
     private SourceRevision resolveBranch(SourceSpec source) throws Exception {
@@ -75,6 +86,39 @@ public class BitbucketSourceRevisionAdapter implements SourceRevisionPort {
             ),
             "bitbucket:pull-request:" + source.pullRequestId()
         );
+    }
+
+    private PullRequestDetails pullRequestDetails(long pullRequestNumber) throws Exception {
+        if (pullRequestNumber <= 0) {
+            throw new IllegalArgumentException("pullRequestNumber must be positive");
+        }
+        JsonNode response = get(repositoryUrl("pullrequests/" + pullRequestNumber));
+        if (!"OPEN".equals(response.path("state").asString())) {
+            throw new IllegalStateException("Pull request is not open");
+        }
+        String sourceCommit = required(
+            response.path("source").path("commit").path("hash").asString(),
+            "pull request source commit"
+        );
+        return new PullRequestDetails(
+            pullRequestNumber,
+            required(
+                response.path("source").path("branch").path("name").asString(),
+                "pull request source branch"
+            ),
+            canonicalCommit(sourceCommit),
+            pullRequestUrl(response, pullRequestNumber)
+        );
+    }
+
+    private String pullRequestUrl(JsonNode response, long pullRequestNumber) {
+        String link = response.path("links").path("html").path("href").asString();
+        if (!link.isBlank()) {
+            return link;
+        }
+        return properties.gitBaseUrl().toString().replaceAll("/$", "") + '/'
+            + properties.workspace() + '/' + properties.repository()
+            + "/pull-requests/" + pullRequestNumber;
     }
 
     private String canonicalCommit(String reference) throws Exception {

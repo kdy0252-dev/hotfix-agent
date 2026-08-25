@@ -6,9 +6,9 @@
 | --- | --- |
 | 문서명 | Software Requirements Specification (SRS) |
 | 시스템명 | Embabel 기반 FMS 핫픽스 에이전트 |
-| 버전 | 1.2 |
+| 버전 | 1.3 |
 | 상태 | 구현 기준선 |
-| 기준일 | 2026-08-21 |
+| 기준일 | 2026-08-24 |
 | 상위 요구사항 | [CRS](CRS.md) |
 | 설계 근거 | [운영 장애 핫픽스 에이전트 설계](../design/observability-hotfix-agent.md) |
 | API 설계 | [Hotfix Agent API](../api/hotfix-agent-api.md) |
@@ -49,6 +49,7 @@ Spring Boot와 Embabel로 실행되며, API 요청으로 전달된 Jenkins 실�
 | Local Git Adapter | detached worktree, source 검색, patch와 diff 검사 |
 | Analysis State Store | analysis, candidate, selection과 hotfix 상태의 로컬 영속화 |
 | Natural Language Command Agent | 자연어를 실행하지 않고 구조화된 명령 또는 명확화 질문으로 변환 |
+| Operator Dashboard | HTMX SSR로 실패 PR, 관측 신호, 자연어 확인과 hotfix 진행 상태 제공 |
 
 ### 4.2 기술 경계
 
@@ -130,7 +131,7 @@ POST /api/v1/analyses/observability
 | SRS-OBS-001 | 시스템은 환경을 `DEV=fms-eu-dev`, `QA=fms-eu-qa`, `PROD=fms-eu-prod` namespace로 매핑해야 한다. | parameterized unit test |
 | SRS-OBS-002 | 시스템은 관측 service를 `EU_APP`으로 내부 고정하고 request에서 service 또는 namespace를 받지 않아야 한다. | unknown field `400` test |
 | SRS-OBS-003 | 각 datasource query의 시작과 종료 시각은 request의 `startAt`, `endAt`과 일치해야 한다. | adapter argument test |
-| SRS-OBS-004 | `startAt`은 `endAt`보다 앞서야 하며 두 시각의 차이는 60분 이하여야 한다. | 0/60/61분 boundary test |
+| SRS-OBS-004 | `startAt`은 `endAt`보다 앞서야 하며 두 시각의 차이는 31일 이하여야 한다. | 0/31일/31일 초과 boundary test |
 | SRS-OBS-005 | request에 `service`, `namespace`, `promql`, `logql`, `traceql`, `observedAt`, `windowMinutes`가 있으면 `400`을 반환해야 한다. | forbidden input test |
 | SRS-OBS-006 | 시스템은 allowlist의 query template과 환경/service/시간 범위 parameter만 사용해야 한다. | query registry test |
 | SRS-OBS-007 | Prometheus 응답은 template당 최대 100 series로 제한해야 한다. | oversized response test |
@@ -256,11 +257,14 @@ POST /api/v1/analyses/{analysisId}/selections
 
 | ID | 소프트웨어 요구사항 | 검증 방법 |
 | --- | --- | --- |
-| SRS-STA-001 | analysis와 hotfix 상태는 `.agent/runtime` 아래 Git 비추적 JSON으로 저장해야 한다. | filesystem test |
-| SRS-STA-002 | 상태 파일은 schema version을 포함해야 한다. | serialization test |
-| SRS-STA-003 | 파일 갱신은 임시 파일 작성 후 atomic move로 수행해야 한다. | adapter test |
+| SRS-STA-001 | analysis, hotfix, interpretation과 execution 상태는 Langfuse와 같은 PostgreSQL 인스턴스의 `hotfix_agent` 스키마에 저장해야 한다. | Compose 및 persistence integration test |
+| SRS-STA-002 | agent 테이블과 Liquibase 메타데이터는 Langfuse가 사용하는 `public` 스키마와 분리해야 한다. | schema inspection test |
+| SRS-STA-003 | 반복 값은 안정적인 순서 컬럼을 가진 관계형 자식 테이블로 저장하고 JSON/JSONB payload 컬럼을 사용하지 않아야 한다. | migration 및 mapping test |
 | SRS-STA-004 | 재시작 복구 시 외부 write 전에 기존 branch와 PR을 조회해야 한다. | crash recovery test |
 | SRS-STA-005 | analysis는 기본 24시간 후 선택 불가 상태가 되어야 한다. | clock test |
+| SRS-STA-006 | Jenkins·관측 분석 원문은 관계형 컬럼에 저장하고, 재기동 시 `ANALYSIS_REQUESTED` 또는 `ANALYZING` 작업을 동일 analysis로 다시 제출해야 한다. | JPA mapping 및 analysis recovery test |
+| SRS-STA-007 | 재기동 시 `SELECTED`, `PATCHING`, `VERIFYING` hotfix는 고정 소스 commit과 동일 hotfix ID로 현재 로컬 workflow를 안전하게 재실행해야 한다. | hotfix recovery 및 worktree recreation test |
+| SRS-STA-008 | `DRAFT_PR_CREATED` hotfix는 재기동으로 로컬 workflow나 새 PR을 시작하지 않으며, Jenkins 상태는 명시적 CI refresh에서만 갱신해야 한다. | hotfix recovery no-interaction test |
 
 ### 5.11 자연어 명령 API와 가드레일
 
@@ -283,6 +287,28 @@ POST /api/v1/analyses/{analysisId}/selections
 | SRS-NL-012 | 자연어로 시작한 실행은 `SRS-SRC`, `SRS-SEL`, `SRS-GIT`, `SRS-VER`, `SRS-PR` gate를 우회하거나 완화하지 않아야 한다. | parity workflow test |
 | SRS-NL-013 | 자연어 원문은 application log, PR과 LLM observability에 기록하지 않고 redacted preview와 SHA-256만 상태에 저장해야 한다. | leakage test |
 | SRS-NL-014 | 동일 interpretation execution idempotency key는 같은 delegated resource를 반환하고 중복 실행하지 않아야 한다. | replay test |
+
+### 5.12 운영 UI
+
+| ID | 소프트웨어 요구사항 | 검증 방법 |
+| --- | --- | --- |
+| SRS-UI-001 | `GET /`는 JavaScript로 화면 전체를 조립하지 않는 SSR shell을 반환하고 기존 `GET /ui`는 `/`로 redirect해야 한다. | controller 및 browser test |
+| SRS-UI-002 | 실패 PR fragment는 Jenkins의 마지막 build가 `FAILURE`인 `PR-*` job과 대응하는 open Bitbucket PR의 branch·commit·링크만 표시해야 한다. | Jenkins/Bitbucket adapter test |
+| SRS-UI-003 | 실패 PR 목록은 화면 진입 1회와 사용자의 명시적 새로고침에서만 외부 시스템을 조회해야 한다. | template trigger 검증 |
+| SRS-UI-004 | 관측 fragment는 사용자가 입력한 시작·종료 시각과 `DEV`, `QA`, `PROD` 환경을 요구하고 EU app 범위를 서버에서 고정해야 한다. | controller/adapter test |
+| SRS-UI-005 | 관측 목록은 활성 알람과 오류 Trace를 구분하고 각 Grafana 상세 링크를 제공해야 한다. | Grafana adapter 및 template test |
+| SRS-UI-006 | 자연어 UI는 해석 미리보기와 version/hash 확인 실행을 분리하고 기존 자연어 use case만 호출해야 한다. | controller/module adapter test |
+| SRS-UI-007 | Draft PR 버튼은 완료된 분석의 `ELIGIBLE` 후보에만 노출되고 analysis version과 candidate ID를 기존 selection use case에 전달해야 한다. | controller/template test |
+| SRS-UI-008 | hotfix 진행 화면은 PostgreSQL의 agent 상태만 주기적으로 읽고 Jenkins/Grafana를 자동 polling하지 않아야 한다. | adapter interaction 및 template trigger 검증 |
+| SRS-UI-009 | 진행 화면은 `SELECTED`, `PATCHING`, `VERIFYING`, `DRAFT_PR_CREATED`, `RESOLVED`와 사람 검토/실패 상태 및 가용한 외부 링크를 표시해야 한다. | assembler 및 template test |
+| SRS-UI-010 | 진행 화면은 같은 `analysisId`의 분석과 hotfix를 하나의 카드로 결합하고 분석, Draft PR 생성, 로컬 빌드·테스트, Jenkins CI의 네 단계를 표시해야 한다. | assembler, controller 및 SSR fragment 검증 |
+| SRS-UI-011 | 하나의 분석에 여러 원인이 있으면 UI와 상태 결합은 각 `candidateId`의 hotfix, branch, Draft PR 및 CI를 독립적으로 추적해야 한다. | workflow assembler test |
+| SRS-UI-012 | UI는 로컬 작업 취소·삭제, 실패 작업의 전체 guardrail 재시작, 명시적 CI 갱신과 Bitbucket/Jenkins 링크를 제공하고 로컬 삭제로 외부 기록을 삭제하지 않아야 한다. | controller, management service 및 workflow cancellation test |
+| SRS-UI-013 | UI는 실행 중인 세부 단계와 설명, 실패 단계·코드·복구 안내, 각 검증의 종료 코드와 redaction된 출력 요약을 DB에서 복원해 표시해야 한다. | assembler, persistence mapping 및 SSR fragment 검증 |
+| SRS-UI-014 | branch가 생성된 실패 hotfix는 기존 `agent/hotfix/*` branch를 사람 검토용으로 게시하고 Bitbucket 링크와 로컬 수정 절차를 표시해야 한다. | workspace adapter, controller 및 template test |
+| SRS-UI-015 | 사람이 같은 branch에 push한 commit의 재검증은 기준 commit 계보와 변경 정책을 다시 확인하고 집중 테스트, AI review, Jenkins parity를 모두 통과한 경우에만 Draft PR을 게시해야 한다. | guarded workflow 및 local Git integration test |
+| SRS-UI-016 | AI 분석 요청은 기존 workflow 목록을 비우지 않고 해당 PR 버튼에서 진행 상태를 표시하며, 완료 시 해당 analysis 카드 하나만 목록 맨 위에 갱신해야 한다. | controller, HTMX fragment 및 JavaScript behavior test |
+| SRS-UI-017 | 완료된 동일 분석 요청은 새 분석을 암묵적으로 만들지 않고 요청 버튼을 `중복 요청 재분석`으로 전환하여 명시적인 강제 재분석만 허용해야 한다. | controller 및 action fragment test |
 
 ## 6. 데이터 요구사항
 
@@ -360,7 +386,7 @@ DRAFT_PR_CREATED -> RESOLVED
 | ID | 요구사항 |
 | --- | --- |
 | SRS-NFR-SEC-001 | API는 기본적으로 loopback interface에만 bind해야 한다. |
-| SRS-NFR-SEC-002 | token과 password는 source, log, 상태 JSON과 PR 본문에 기록하지 않아야 한다. |
+| SRS-NFR-SEC-002 | token과 password는 source, log, agent 상태 테이블과 PR 본문에 기록하지 않아야 한다. |
 | SRS-NFR-SEC-003 | Authorization, Cookie, secret, connection string과 식별정보는 LLM 전달 전에 마스킹해야 한다. |
 | SRS-NFR-SEC-004 | 원본 운영 evidence는 Git에 포함하지 않아야 한다. |
 | SRS-NFR-SEC-005 | Embabel observability에서 prompt/result content capture를 비활성화해야 한다. |

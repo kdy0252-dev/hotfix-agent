@@ -1,11 +1,13 @@
 package com.example.myagent.incident.adapter.out.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.example.myagent.global.configuration.JenkinsProperties;
 import com.example.myagent.global.support.SensitiveEvidenceRedactor;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisRequest;
 import com.example.myagent.incident.application.domain.model.analysis.SourceSpec;
+import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -89,6 +91,38 @@ class JenkinsRestAdapterTest {
         assertThat(paths).containsExactly(BUILD_PATH + "/api/json");
     }
 
+    @Test
+    void listsOnlyFailedPullRequestJobsByMostRecentBuild() {
+        var result = adapter.findFailedPullRequestBuilds().get();
+
+        assertThat(result).extracting(build -> build.pullRequestNumber())
+            .containsExactly(1293L, 1292L);
+        assertThat(result).allSatisfy(build -> {
+            assertThat(build.result()).isEqualTo("FAILURE");
+            assertThat(build.jobPath()).startsWith("FMS-EU/job/PR-");
+        });
+    }
+
+    @Test
+    void readsTheActualPipelineStagesForAnExplicitCiRefresh() {
+        String buildUrl = "http://127.0.0.1:" + server.getAddress().getPort() + BUILD_PATH;
+
+        var snapshot = adapter.refreshPullRequestBuild(buildUrl).get();
+
+        assertThat(paths).containsExactly(
+            BUILD_PATH + "/api/json",
+            BUILD_PATH + "/wfapi/describe"
+        );
+        assertThat(snapshot.result()).isEqualTo("IN_PROGRESS");
+        assertThat(snapshot.pipeline().stages())
+            .extracting(HotfixResource.CiStage::name, HotfixResource.CiStage::status)
+            .containsExactly(
+                tuple("Checkout SCM", "SUCCESS"),
+                tuple("Test", "IN_PROGRESS"),
+                tuple("Image Build", "NOT_EXECUTED")
+            );
+    }
+
     private AnalysisRequest.Jenkins request() {
         return new AnalysisRequest.Jenkins(
             "FMS-EU/job/main",
@@ -101,12 +135,16 @@ class JenkinsRestAdapterTest {
         paths.add(exchange.getRequestURI().getPath());
         authorizations.add(exchange.getRequestHeaders().getFirst("Authorization"));
         String path = exchange.getRequestURI().getPath();
-        if (path.endsWith("/api/json") && !path.contains("testReport")) {
+        if (path.equals("/job/FMS-EU/api/json")) {
+            respond(exchange, pullRequestJobs());
+        } else if (path.endsWith("/api/json") && !path.contains("testReport")) {
             respond(exchange, metadata());
         } else if (path.endsWith("/consoleText")) {
             respond(exchange, console());
         } else if (path.endsWith("/testReport/api/json")) {
             respond(exchange, "{\"failCount\":1,\"name\":\"failed-test\"}");
+        } else if (path.endsWith("/wfapi/describe")) {
+            respond(exchange, pipeline());
         } else {
             exchange.sendResponseHeaders(404, -1);
             exchange.close();
@@ -133,6 +171,39 @@ class JenkinsRestAdapterTest {
             .mapToObj(index -> "ERROR failure line " + index)
             .reduce((left, right) -> left + '\n' + right)
             .orElse("");
+    }
+
+    private String pullRequestJobs() {
+        return """
+            {
+              "jobs": [
+                {"name":"PR-1292","lastBuild":{"number":1,"result":"FAILURE",
+                  "timestamp":1787100000000,"url":"https://jenkins/job/PR-1292/1/"}},
+                {"name":"PR-1293","lastBuild":{"number":2,"result":"FAILURE",
+                  "timestamp":1787200000000,"url":"https://jenkins/job/PR-1293/2/"}},
+                {"name":"PR-1294","lastBuild":{"number":3,"result":"SUCCESS",
+                  "timestamp":1787300000000,"url":"https://jenkins/job/PR-1294/3/"}},
+                {"name":"main","lastBuild":{"number":181,"result":"FAILURE",
+                  "timestamp":1787400000000,"url":"https://jenkins/job/main/181/"}}
+              ]
+            }
+            """;
+    }
+
+    private String pipeline() {
+        return """
+            {
+              "status":"IN_PROGRESS",
+              "stages":[
+                {"id":"10","name":"Checkout SCM","status":"SUCCESS",
+                 "startTimeMillis":1787527475678,"durationMillis":74215},
+                {"id":"31","name":"Test","status":"IN_PROGRESS",
+                 "startTimeMillis":1787527557221,"durationMillis":47193},
+                {"id":"45","name":"Image Build","status":"NOT_EXECUTED",
+                 "startTimeMillis":0,"durationMillis":0}
+              ]
+            }
+            """;
     }
 
     private void respond(HttpExchange exchange, String body) throws IOException {

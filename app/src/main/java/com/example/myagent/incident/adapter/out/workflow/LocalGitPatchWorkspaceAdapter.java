@@ -1,6 +1,7 @@
 package com.example.myagent.incident.adapter.out.workflow;
 
 import com.example.myagent.global.configuration.AgentRuntimeProperties;
+import com.example.myagent.global.configuration.BitbucketProperties;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisSession;
 import com.example.myagent.incident.application.domain.model.analysis.BugCandidate;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.AppliedPatch;
@@ -11,9 +12,14 @@ import com.example.myagent.incident.application.port.out.IncidentFailure;
 import com.example.myagent.incident.application.port.out.PatchWorkspacePort;
 import io.vavr.control.Either;
 import io.vavr.control.Try;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,12 +40,19 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
     private static final int MAX_SOURCE_CHARACTERS = 60_000;
     private static final int MAX_SOURCE_CONTEXT_CHARACTERS = 200_000;
     private static final Set<String> SOURCE_EXTENSIONS = Set.of(".java", ".kt", ".kts");
+    private static final Set<PosixFilePermission> OWNER_EXECUTABLE = Set.of(
+        PosixFilePermission.OWNER_READ,
+        PosixFilePermission.OWNER_WRITE,
+        PosixFilePermission.OWNER_EXECUTE
+    );
 
     private final Path repositoryPath;
     private final Path worktreeDirectory;
+    private final BitbucketProperties bitbucket;
 
     public LocalGitPatchWorkspaceAdapter(
         AgentRuntimeProperties runtimeProperties,
+        BitbucketProperties bitbucket,
         @Value("${agent.runtime.state-path:.agent/runtime}") String statePath
     ) {
         Path configuredRepository = runtimeProperties.fmsRepositoryPath();
@@ -47,6 +60,7 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             ? Path.of(".").toAbsolutePath().normalize()
             : configuredRepository.toAbsolutePath().normalize();
         worktreeDirectory = Path.of(statePath).toAbsolutePath().normalize().resolve("worktrees");
+        this.bitbucket = bitbucket;
     }
 
     @Override
@@ -58,16 +72,17 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
         return Try.of(() -> {
             String normalizedId = UUID.fromString(hotfixId).toString();
             Path worktree = worktreeDirectory.resolve(normalizedId).normalize();
-            if (!worktree.startsWith(worktreeDirectory) || Files.exists(worktree)) {
-                throw new IllegalStateException("Dedicated worktree already exists");
+            if (!worktree.startsWith(worktreeDirectory)) {
+                throw new IllegalStateException("Dedicated worktree path is invalid");
             }
+            String branchName = branchName(hotfixId, candidate.identity().title());
             Files.createDirectories(worktreeDirectory);
+            resetInterruptedWorkspace(worktree, branchName);
             ensureCommitAvailable(analysis.snapshot().sourceRevision().commit());
             runRequired(repositoryPath, List.of(
                 "git", "-C", repositoryPath.toString(), "worktree", "add", "--detach",
                 worktree.toString(), analysis.snapshot().sourceRevision().commit()
             ));
-            String branchName = branchName(hotfixId, candidate.identity().title());
             runRequired(worktree, List.of("git", "switch", "-c", branchName));
             Map<String, String> sourceFiles = loadSourceFiles(worktree, candidate);
             if (sourceFiles.isEmpty()) {
@@ -81,7 +96,8 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             );
         }).toEither().mapLeft(exception -> failure(
             "PATCH_WORKSPACE_PREPARE_FAILED",
-            "고정된 소스 커밋으로 전용 hotfix worktree를 준비하지 못했습니다."
+            "고정된 소스 커밋으로 전용 hotfix worktree를 준비하지 못했습니다.",
+            exception
         ));
     }
 
@@ -92,7 +108,7 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             Path worktree = Path.of(workspace.worktreePath()).toAbsolutePath().normalize();
             proposal.updates().forEach(update -> write(worktree, update.path(), update.content()));
             ChangeSummary changes = inspectChanges(workspace);
-            validateChanges(changes);
+            validateChanges(workspace, changes);
             runRequired(worktree, addCommand(changes.files()));
             runRequired(worktree, List.of(
                 "git", "-c", "user.name=FMS Hotfix Agent",
@@ -108,7 +124,8 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             return new AppliedPatch(refreshed, changes, readHead(worktree));
         }).toEither().mapLeft(exception -> failure(
             "PATCH_POLICY_OR_APPLY_FAILED",
-            "수정안이 파일·변경량 정책을 통과하지 못했거나 적용에 실패했습니다."
+            "수정안이 파일·변경량 정책을 통과하지 못했거나 적용에 실패했습니다.",
+            exception
         ));
     }
 
@@ -121,7 +138,8 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             readAllowedFiles(Path.of(workspace.worktreePath()), workspace.sourceFiles().keySet())
         )).toEither().mapLeft(exception -> failure(
             "PATCH_WORKSPACE_REFRESH_FAILED",
-            "재시도를 위해 수정된 소스 파일을 다시 읽지 못했습니다."
+            "재시도를 위해 수정된 소스 파일을 다시 읽지 못했습니다.",
+            exception
         ));
     }
 
@@ -135,8 +153,62 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             .toEither()
             .mapLeft(exception -> failure(
                 "PATCH_HEAD_READ_FAILED",
-                "검증 대상 hotfix 커밋을 확인하지 못했습니다."
+                "검증 대상 hotfix 커밋을 확인하지 못했습니다.",
+                exception
             ));
+    }
+
+    @Override
+    public Either<IncidentFailure, ReviewBranch> publishForHumanReview(
+        AnalysisSession analysis,
+        BugCandidate candidate,
+        String hotfixId,
+        String branchName
+    ) {
+        return Try.of(() -> {
+            Workspace workspace = restoreWorkspace(analysis, candidate, hotfixId, branchName);
+            pushBranch(workspace);
+            return new ReviewBranch(
+                branchName,
+                branchUrl(branchName),
+                readHead(Path.of(workspace.worktreePath()))
+            );
+        }).toEither().mapLeft(exception -> failure(
+            "HUMAN_REVIEW_BRANCH_PUBLISH_FAILED",
+            "사람 검토용 hotfix branch를 Bitbucket에 게시하지 못했습니다.",
+            exception
+        ));
+    }
+
+    @Override
+    public Either<IncidentFailure, AppliedPatch> reloadHumanChanges(
+        AnalysisSession analysis,
+        BugCandidate candidate,
+        String hotfixId,
+        String branchName
+    ) {
+        return Try.of(() -> {
+            Workspace workspace = restoreWorkspace(analysis, candidate, hotfixId, branchName);
+            Path worktree = Path.of(workspace.worktreePath());
+            fetchBranch(worktree, branchName);
+            runRequired(worktree, List.of("git", "reset", "--hard", "FETCH_HEAD"));
+            runRequired(worktree, List.of(
+                "git", "merge-base", "--is-ancestor", workspace.baseCommit(), "HEAD"
+            ));
+            ChangeSummary changes = inspectChanges(workspace);
+            validateChanges(workspace, changes);
+            Workspace refreshed = new Workspace(
+                workspace.worktreePath(),
+                workspace.branchName(),
+                workspace.baseCommit(),
+                loadSourceFiles(worktree, candidate)
+            );
+            return new AppliedPatch(refreshed, changes, readHead(worktree));
+        }).toEither().mapLeft(exception -> failure(
+            "HUMAN_CHANGES_RELOAD_FAILED",
+            "사람이 push한 commit을 불러오지 못했거나 변경 정책을 통과하지 못했습니다.",
+            exception
+        ));
     }
 
     private Map<String, String> loadSourceFiles(Path worktree, BugCandidate candidate)
@@ -203,10 +275,11 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
         return new ChangeSummary(names, changedLines);
     }
 
-    private void validateChanges(ChangeSummary changes) {
+    private void validateChanges(Workspace workspace, ChangeSummary changes) {
         if (changes.files().isEmpty() || changes.files().size() > MAX_FILES
             || changes.changedLines() > MAX_CHANGED_LINES
-            || changes.files().stream().anyMatch(this::isForbidden)) {
+            || changes.files().stream().anyMatch(this::isForbidden)
+            || !workspace.sourceFiles().keySet().containsAll(changes.files())) {
             throw new IllegalArgumentException("Applied diff is outside policy");
         }
     }
@@ -303,11 +376,105 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
 
     private LocalProcessExecutor.Result runRequired(Path directory, List<String> command)
         throws Exception {
-        var result = LocalProcessExecutor.run(directory, command);
+        return runRequired(directory, command, Map.of());
+    }
+
+    private LocalProcessExecutor.Result runRequired(
+        Path directory,
+        List<String> command,
+        Map<String, String> environment
+    ) throws Exception {
+        var result = LocalProcessExecutor.run(
+            directory,
+            command,
+            environment,
+            Duration.ofMinutes(5)
+        );
         if (!result.successful()) {
             throw new IllegalStateException(result.output());
         }
         return result;
+    }
+
+    private Workspace restoreWorkspace(
+        AnalysisSession analysis,
+        BugCandidate candidate,
+        String hotfixId,
+        String branchName
+    ) throws Exception {
+        String normalizedId = UUID.fromString(hotfixId).toString();
+        Path worktree = worktreeDirectory.resolve(normalizedId).toAbsolutePath().normalize();
+        if (!worktree.startsWith(worktreeDirectory) || !Files.isDirectory(worktree)) {
+            throw new IllegalStateException("Dedicated hotfix worktree does not exist");
+        }
+        if (branchName == null || !branchName.startsWith("agent/hotfix/")) {
+            throw new IllegalArgumentException("Only agent hotfix branches may be resumed");
+        }
+        String actualBranch = runRequired(
+            worktree,
+            List.of("git", "branch", "--show-current")
+        ).output().trim();
+        if (!branchName.equals(actualBranch)) {
+            throw new IllegalStateException("Hotfix worktree branch does not match stored state");
+        }
+        return new Workspace(
+            worktree.toString(),
+            branchName,
+            analysis.snapshot().sourceRevision().commit(),
+            loadSourceFiles(worktree, candidate)
+        );
+    }
+
+    private void pushBranch(Workspace workspace) throws Exception {
+        withBitbucketAuthentication(environment -> runRequired(
+            Path.of(workspace.worktreePath()),
+            List.of("git", "push", "--set-upstream", gitRemote(), workspace.branchName()),
+            environment
+        ));
+    }
+
+    private void fetchBranch(Path worktree, String branchName) throws Exception {
+        withBitbucketAuthentication(environment -> runRequired(
+            worktree,
+            List.of("git", "fetch", "--no-tags", gitRemote(), branchName),
+            environment
+        ));
+    }
+
+    private void withBitbucketAuthentication(AuthenticatedGitAction action) throws Exception {
+        Path askPass = Files.createTempFile("agent-bitbucket-askpass-", ".sh");
+        Try.run(() -> {
+            Files.writeString(askPass, """
+                #!/bin/sh
+                case "$1" in
+                  *Username*) printf '%s\\n' 'x-token-auth' ;;
+                  *) printf '%s\\n' "$BITBUCKET_TOKEN" ;;
+                esac
+                """);
+            Files.setPosixFilePermissions(askPass, OWNER_EXECUTABLE);
+            action.run(Map.of(
+                "GIT_ASKPASS", askPass.toString(),
+                "GIT_TERMINAL_PROMPT", "0",
+                "BITBUCKET_TOKEN", bitbucket.token()
+            ));
+        }).andFinally(() -> delete(askPass)).get();
+    }
+
+    private void delete(Path path) {
+        Try.run(() -> Files.deleteIfExists(path)).get();
+    }
+
+    private String gitRemote() {
+        String base = bitbucket.gitBaseUrl().toString().replaceAll("/$", "");
+        return base + '/' + bitbucket.workspace() + '/' + bitbucket.repository() + ".git";
+    }
+
+    private String branchUrl(String branchName) {
+        String base = bitbucket.gitBaseUrl().toString().replaceAll("/$", "");
+        String encodedBranch = URLEncoder.encode(branchName, StandardCharsets.UTF_8)
+            .replace("+", "%20");
+        return base + '/' + bitbucket.workspace() + '/' + bitbucket.repository()
+            + "/branch/" + encodedBranch;
     }
 
     private void ensureCommitAvailable(String commit) throws Exception {
@@ -316,10 +483,37 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             List.of("git", "cat-file", "-e", commit + "^{commit}")
         );
         if (!existing.successful()) {
-            runRequired(repositoryPath, List.of(
-                "git", "fetch", "--no-tags", "origin", commit
+            withBitbucketAuthentication(environment -> runRequired(
+                repositoryPath,
+                List.of("git", "fetch", "--no-tags", gitRemote(), commit),
+                environment
             ));
         }
+    }
+
+    private void resetInterruptedWorkspace(Path worktree, String branchName) throws Exception {
+        if (Files.exists(worktree)) {
+            var removal = LocalProcessExecutor.run(
+                repositoryPath,
+                List.of("git", "worktree", "remove", "--force", worktree.toString())
+            );
+            if (!removal.successful() && Files.exists(worktree)) {
+                deleteRecursively(worktree);
+            }
+        }
+        LocalProcessExecutor.run(repositoryPath, List.of("git", "worktree", "prune"));
+        LocalProcessExecutor.run(repositoryPath, List.of("git", "branch", "-D", branchName));
+    }
+
+    @SuppressWarnings("StreamResourceLeak")
+    private void deleteRecursively(Path path) {
+        Try.withResources(() -> Files.walk(path))
+            .of(paths -> {
+                paths.sorted(Comparator.reverseOrder())
+                    .forEach(item -> Try.run(() -> Files.deleteIfExists(item)).get());
+                return null;
+            })
+            .get();
     }
 
     private String readHead(Path worktree) throws Exception {
@@ -346,5 +540,22 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
 
     private IncidentFailure failure(String code, String message) {
         return new IncidentFailure(code, message);
+    }
+
+    private IncidentFailure failure(String code, String message, Throwable exception) {
+        String token = Optional.ofNullable(bitbucket.token()).orElse("");
+        String technicalMessage = Optional.ofNullable(exception.getMessage())
+            .orElse(exception.getClass().getSimpleName());
+        if (!token.isBlank()) {
+            technicalMessage = technicalMessage.replace(token, "[REDACTED]");
+        }
+        String normalized = technicalMessage.replaceAll("[\\r\\n]+", " ").trim();
+        String bounded = normalized.substring(0, Math.min(normalized.length(), 800));
+        return failure(code, message + " 상세: " + bounded);
+    }
+
+    @FunctionalInterface
+    private interface AuthenticatedGitAction {
+        void run(Map<String, String> environment) throws Exception;
     }
 }
