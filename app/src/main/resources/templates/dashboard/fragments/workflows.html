@@ -270,7 +270,8 @@
                     </form>
                     <form th:if="${hotfix != null and (hotfix.progress.status == 'FAILED' or hotfix.progress.status == 'NEEDS_HUMAN_REVIEW') and hotfix.progress.currentStep == 2}"
                           th:attr="hx-post=@{/ui/hotfixes/{id}/restarts(id=${hotfix.identity.hotfixId})}"
-                          hx-target="#workflow-list" hx-swap="outerHTML">
+                          hx-target="#workflow-list" hx-swap="outerHTML"
+                          data-preserve-on-error>
                         <button type="submit" class="stage-action">가드레일부터 재시작</button>
                     </form>
                 </li>
@@ -309,7 +310,8 @@
                     </form>
                     <form th:if="${hotfix != null and (hotfix.progress.status == 'FAILED' or hotfix.progress.status == 'NEEDS_HUMAN_REVIEW') and hotfix.progress.currentStep == 3}"
                           th:attr="hx-post=@{/ui/hotfixes/{id}/restarts(id=${hotfix.identity.hotfixId})}"
-                          hx-target="#workflow-list" hx-swap="outerHTML">
+                          hx-target="#workflow-list" hx-swap="outerHTML"
+                          data-preserve-on-error>
                         <button type="submit" class="stage-action">가드레일부터 재시작</button>
                     </form>
                 </li>

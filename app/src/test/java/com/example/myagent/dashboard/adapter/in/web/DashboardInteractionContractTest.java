@@ -98,9 +98,19 @@ class DashboardInteractionContractTest {
     @Test
     void exposesServerRestartRecoveryOnTheActiveCard() throws Exception {
         String workflows = resource("templates/dashboard/fragments/workflows.html");
+        String script = resource("static/js/dashboard.js");
         String styles = resource("static/css/dashboard.css");
 
-        assertThat(workflows).contains("recovery-state", "RESTART RECOVERY", "서버 재기동");
+        assertThat(workflows).contains(
+            "recovery-state",
+            "RESTART RECOVERY",
+            "서버 재기동",
+            "data-preserve-on-error"
+        );
+        assertThat(script).contains(
+            "requestConfig?.elt",
+            "event.detail.shouldSwap = !preserveTarget"
+        );
         assertThat(styles).contains(".recovery-state");
     }
 
@@ -154,7 +164,7 @@ class DashboardInteractionContractTest {
         String styles = resource("static/css/dashboard.css");
 
         assertThat(dashboard)
-            .contains("chat-launcher", "chat-drawer", "AI 상담", "Enter 전송")
+            .contains("chat-launcher", "chat-drawer", "AI 챗봇", "Enter 전송")
             .doesNotContain("<section class=\"hero panel\"");
         assertThat(chatAnalysis).contains(
             "챗봇 요청을 분석 중입니다",

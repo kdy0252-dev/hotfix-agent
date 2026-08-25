@@ -37,7 +37,7 @@ agent:
   runtime:
     mode: ${AGENT_MODE:REPORT_ONLY}
     fms-repository-path: ${AGENT_FMS_REPOSITORY_PATH}
-    analysis-ttl: ${AGENT_ANALYSIS_TTL:24h}
+    analysis-ttl: ${AGENT_ANALYSIS_TTL:72h}
     state-path: ${AGENT_STATE_PATH:.agent/runtime}
   observability:
     scope:

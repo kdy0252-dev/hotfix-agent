@@ -261,7 +261,7 @@ POST /api/v1/analyses/{analysisId}/selections
 | SRS-STA-002 | agent 테이블과 Liquibase 메타데이터는 Langfuse가 사용하는 `public` 스키마와 분리해야 한다. | schema inspection test |
 | SRS-STA-003 | 반복 값은 안정적인 순서 컬럼을 가진 관계형 자식 테이블로 저장하고 JSON/JSONB payload 컬럼을 사용하지 않아야 한다. | migration 및 mapping test |
 | SRS-STA-004 | 재시작 복구 시 외부 write 전에 기존 branch와 PR을 조회해야 한다. | crash recovery test |
-| SRS-STA-005 | analysis는 기본 24시간 후 선택 불가 상태가 되어야 한다. | clock test |
+| SRS-STA-005 | analysis는 기본 72시간 후 선택 불가 상태가 되어야 한다. TTL이 늘어나면 기존 analysis에도 생성 시각 기준 새 TTL을 적용해야 한다. | clock test |
 | SRS-STA-006 | Jenkins·관측 분석 원문은 관계형 컬럼에 저장하고, 재기동 시 `ANALYSIS_REQUESTED` 또는 `ANALYZING` 작업을 동일 analysis로 다시 제출해야 한다. | JPA mapping 및 analysis recovery test |
 | SRS-STA-007 | 재기동 시 `SELECTED`, `PATCHING`, `VERIFYING` hotfix는 고정 소스 commit과 동일 hotfix ID로 현재 로컬 workflow를 안전하게 재실행해야 한다. | hotfix recovery 및 worktree recreation test |
 | SRS-STA-008 | `DRAFT_PR_CREATED` hotfix는 재기동으로 로컬 workflow나 새 PR을 시작하지 않으며, Jenkins 상태는 명시적 CI refresh에서만 갱신해야 한다. | hotfix recovery no-interaction test |

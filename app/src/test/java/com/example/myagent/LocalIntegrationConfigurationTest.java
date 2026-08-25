@@ -107,7 +107,7 @@ class LocalIntegrationConfigurationTest {
 
         assertThat(agentRuntimeProperties.mode()).isEqualTo(AgentRuntimeProperties.Mode.REPORT_ONLY);
         assertThat(agentRuntimeProperties.fmsRepositoryPath()).isEqualTo(Path.of("/tmp/fms-test"));
-        assertThat(agentRuntimeProperties.analysisTtl()).isEqualTo(Duration.ofHours(24));
+        assertThat(agentRuntimeProperties.analysisTtl()).isEqualTo(Duration.ofDays(3));
         assertThat(aiInputBudgetProperties.triage().maxInputTokens()).isEqualTo(8_000);
         assertThat(aiInputBudgetProperties.triage().maxOutputTokens()).isEqualTo(1_500);
         assertThat(aiInputBudgetProperties.reasoning().maxInputTokens()).isEqualTo(16_000);

@@ -637,7 +637,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const error = responseError(xhr.responseText);
         showErrorToast(error.code, error.message);
         handledErrors.add(xhr);
-        event.detail.shouldSwap = true;
+        const requestElement = event.detail.requestConfig?.elt;
+        const preserveTarget = requestElement?.closest?.("[data-preserve-on-error]");
+        event.detail.shouldSwap = !preserveTarget;
         event.detail.isError = false;
     });
 

@@ -15,6 +15,7 @@ import com.example.myagent.incident.application.port.out.IncidentStatePort.Hotfi
 import com.example.myagent.incident.application.port.out.SourceRevisionPort;
 import io.vavr.control.Try;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.core.task.TaskExecutor;
@@ -229,8 +230,16 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
         if (analysis.identity().version() != command.analysisVersion()) {
             throw new IncidentUseCaseException("STALE_ANALYSIS", "분석 version이 최신이 아닙니다.");
         }
-        if (!clock.instant().isBefore(analysis.snapshot().expiresAt())) {
-            throw new IncidentUseCaseException("ANALYSIS_EXPIRED", "분석 결과가 만료되었습니다.");
+        Instant configuredExpiry = analysis.snapshot().createdAt().plus(
+            runtimeProperties.analysisTtl()
+        );
+        Instant effectiveExpiry = analysis.snapshot().expiresAt().isAfter(configuredExpiry)
+            ? analysis.snapshot().expiresAt() : configuredExpiry;
+        if (!clock.instant().isBefore(effectiveExpiry)) {
+            throw new IncidentUseCaseException(
+                "ANALYSIS_EXPIRED",
+                "분석 결과의 설정된 유효기간이 지나 만료되었습니다. 최신 증거로 다시 분석해주세요."
+            );
         }
     }
 

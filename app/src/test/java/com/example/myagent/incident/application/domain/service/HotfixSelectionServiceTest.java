@@ -129,6 +129,74 @@ class HotfixSelectionServiceTest {
         assertThat(envelope.getValue().resource()).isEqualTo(completed);
     }
 
+    @Test
+    void appliesTheExtendedRuntimeTtlToAnExistingAnalysisSnapshot() {
+        var statePort = mock(IncidentStatePort.class);
+        var sourceRevisionPort = mock(SourceRevisionPort.class);
+        var workflowPort = mock(HotfixWorkflowPort.class);
+        var analysis = analysis();
+        var candidate = analysis.result().candidates().getFirst();
+        var service = selectionServiceWithTtl(
+            statePort,
+            sourceRevisionPort,
+            workflowPort,
+            Duration.ofDays(3),
+            Instant.parse("2026-08-21T01:00:00Z")
+        );
+        when(statePort.findHotfixByIdempotencyKey("selection-key"))
+            .thenReturn(Either.right(Optional.empty()));
+        when(statePort.findAnalysis("analysis-1")).thenReturn(Either.right(Optional.of(
+            new IncidentStatePort.AnalysisEnvelope(1, "analysis-key", "hash", analysis)
+        )));
+        when(sourceRevisionPort.resolve(analysis.snapshot().source()))
+            .thenReturn(Either.right(analysis.snapshot().sourceRevision()));
+        when(statePort.saveHotfix(any())).thenAnswer(invocation -> {
+            IncidentStatePort.HotfixEnvelope envelope = invocation.getArgument(0);
+            return Either.right(envelope.resource());
+        });
+
+        HotfixResource selected = service.select(new SelectionCommand(
+            "analysis-1",
+            candidate.identity().candidateId(),
+            1,
+            "selection-key"
+        ));
+
+        assertThat(selected.progress().status()).isEqualTo(HotfixResource.Status.SELECTED);
+    }
+
+    @Test
+    void rejectsAnAnalysisAfterTheConfiguredThreeDayTtl() {
+        var statePort = mock(IncidentStatePort.class);
+        var sourceRevisionPort = mock(SourceRevisionPort.class);
+        var workflowPort = mock(HotfixWorkflowPort.class);
+        var analysis = analysis();
+        var candidate = analysis.result().candidates().getFirst();
+        var service = selectionServiceWithTtl(
+            statePort,
+            sourceRevisionPort,
+            workflowPort,
+            Duration.ofDays(3),
+            Instant.parse("2026-08-23T01:00:00Z")
+        );
+        when(statePort.findHotfixByIdempotencyKey("selection-key"))
+            .thenReturn(Either.right(Optional.empty()));
+        when(statePort.findAnalysis("analysis-1")).thenReturn(Either.right(Optional.of(
+            new IncidentStatePort.AnalysisEnvelope(1, "analysis-key", "hash", analysis)
+        )));
+
+        assertThatThrownBy(() -> service.select(new SelectionCommand(
+            "analysis-1",
+            candidate.identity().candidateId(),
+            1,
+            "selection-key"
+        ))).isInstanceOf(IncidentUseCaseException.class)
+            .extracting(exception -> ((IncidentUseCaseException) exception).code())
+            .isEqualTo("ANALYSIS_EXPIRED");
+
+        verify(sourceRevisionPort, never()).resolve(any());
+    }
+
     private AnalysisSession analysis() {
         var candidate = new BugCandidate(
             new BugCandidate.Identity(
@@ -170,6 +238,22 @@ class HotfixSelectionServiceTest {
         SourceRevisionPort sourceRevisionPort,
         HotfixWorkflowPort workflowPort
     ) {
+        return selectionServiceWithTtl(
+            statePort,
+            sourceRevisionPort,
+            workflowPort,
+            Duration.ofHours(24),
+            Instant.parse("2026-08-20T01:00:00Z")
+        );
+    }
+
+    private HotfixSelectionService selectionServiceWithTtl(
+        IncidentStatePort statePort,
+        SourceRevisionPort sourceRevisionPort,
+        HotfixWorkflowPort workflowPort,
+        Duration analysisTtl,
+        Instant now
+    ) {
         return new HotfixSelectionService(
             statePort,
             sourceRevisionPort,
@@ -177,9 +261,9 @@ class HotfixSelectionServiceTest {
             new AgentRuntimeProperties(
                 AgentRuntimeProperties.Mode.DRAFT_PR,
                 Path.of("/tmp/fms"),
-                Duration.ofHours(24)
+                analysisTtl
             ),
-            Clock.fixed(Instant.parse("2026-08-20T01:00:00Z"), ZoneOffset.UTC),
+            Clock.fixed(now, ZoneOffset.UTC),
             new CapturingTaskExecutor(),
             new HotfixExecutionRegistry()
         );
