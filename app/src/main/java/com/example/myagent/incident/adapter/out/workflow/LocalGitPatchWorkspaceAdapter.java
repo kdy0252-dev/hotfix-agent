@@ -8,6 +8,7 @@ import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifac
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.ChangeSummary;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.Proposal;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.Workspace;
+import com.example.myagent.incident.application.domain.model.policy.MigrationSafetyPolicy;
 import com.example.myagent.incident.application.port.out.IncidentFailure;
 import com.example.myagent.incident.application.port.out.PatchWorkspacePort;
 import io.vavr.control.Either;
@@ -39,7 +40,9 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
     private static final int MAX_CHANGED_LINES = 500;
     private static final int MAX_SOURCE_CHARACTERS = 60_000;
     private static final int MAX_SOURCE_CONTEXT_CHARACTERS = 200_000;
-    private static final Set<String> SOURCE_EXTENSIONS = Set.of(".java", ".kt", ".kts");
+    private static final Set<String> SOURCE_EXTENSIONS = Set.of(
+        ".java", ".kt", ".kts", ".sql", ".xml", ".yaml", ".yml"
+    );
     private static final Set<PosixFilePermission> OWNER_EXECUTABLE = Set.of(
         PosixFilePermission.OWNER_READ,
         PosixFilePermission.OWNER_WRITE,
@@ -275,12 +278,33 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
         return new ChangeSummary(names, changedLines);
     }
 
-    private void validateChanges(Workspace workspace, ChangeSummary changes) {
+    private void validateChanges(Workspace workspace, ChangeSummary changes) throws Exception {
         if (changes.files().isEmpty() || changes.files().size() > MAX_FILES
             || changes.changedLines() > MAX_CHANGED_LINES
             || changes.files().stream().anyMatch(this::isForbidden)
             || !workspace.sourceFiles().keySet().containsAll(changes.files())) {
             throw new IllegalArgumentException("Applied diff is outside policy");
+        }
+        validateMigrationChanges(workspace, changes.files());
+    }
+
+    private void validateMigrationChanges(Workspace workspace, List<String> files)
+        throws Exception {
+        var migrationFiles = files.stream()
+            .filter(MigrationSafetyPolicy::isMigrationPath)
+            .toList();
+        if (migrationFiles.isEmpty()) {
+            return;
+        }
+        var command = new ArrayList<>(List.of(
+            "git", "diff", "--unified=0", workspace.baseCommit(), "--"
+        ));
+        command.addAll(migrationFiles);
+        String diff = runRequired(Path.of(workspace.worktreePath()), command).output();
+        if (!MigrationSafetyPolicy.isBackwardCompatibleDiff(diff)) {
+            throw new IllegalArgumentException(
+                "Migration diff is destructive or backward incompatible"
+            );
         }
     }
 
@@ -348,10 +372,6 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             || normalized.endsWith(".key")
             || normalized.endsWith(".pem")
             || normalized.endsWith(".p12")
-            || normalized.contains("migration")
-            || normalized.contains("liquibase")
-            || normalized.contains("changelog")
-            || normalized.endsWith(".sql")
             || normalized.contains("kubernetes")
             || normalized.contains("/k8s/")
             || normalized.contains("/helm/")

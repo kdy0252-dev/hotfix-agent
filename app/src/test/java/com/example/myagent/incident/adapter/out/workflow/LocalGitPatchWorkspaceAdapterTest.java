@@ -248,8 +248,6 @@ class LocalGitPatchWorkspaceAdapterTest {
             "eu/.env.prod",
             "eu/secret-token.java",
             "eu/certificate.pem",
-            "eu/migration/V1.sql",
-            "eu/liquibase/changelog.xml",
             "eu/kubernetes/deployment.yaml",
             "eu/helm/values-prod.yaml",
             "eu/app-manifest.yaml",
@@ -269,6 +267,83 @@ class LocalGitPatchWorkspaceAdapterTest {
             ));
             assertThat(result.isLeft()).as(path).isTrue();
         });
+    }
+
+    @Test
+    void acceptsAnAdditiveBackwardCompatibleMigration() throws Exception {
+        String migrationPath = addMigrationFile();
+        var migrationCandidate = candidate(migrationPath + ":2");
+        var workspace = adapter.prepare(
+            analysis(migrationCandidate),
+            migrationCandidate,
+            hotfixId()
+        ).get();
+        var proposal = new Proposal(
+            "Add nullable booking note",
+            List.of(new FileUpdate(
+                migrationPath,
+                """
+                    <databaseChangeLog>
+                        <changeSet id="add-booking-note" author="agent">
+                            <addColumn tableName="bookings">
+                                <column name="note" type="varchar(255)"/>
+                            </addColumn>
+                        </changeSet>
+                    </databaseChangeLog>
+                    """,
+                "Add a nullable column"
+            ))
+        );
+
+        var result = adapter.apply(workspace, proposal);
+
+        assertThat(result.isRight()).isTrue();
+        assertThat(result.get().changes().files()).containsExactly(migrationPath);
+    }
+
+    @Test
+    void rejectsABackwardIncompatibleMigration() throws Exception {
+        String migrationPath = addMigrationFile();
+        var migrationCandidate = candidate(migrationPath + ":2");
+        var workspace = adapter.prepare(
+            analysis(migrationCandidate),
+            migrationCandidate,
+            hotfixId()
+        ).get();
+        var proposal = new Proposal(
+            "Drop legacy booking column",
+            List.of(new FileUpdate(
+                migrationPath,
+                """
+                    <databaseChangeLog>
+                        <changeSet id="drop-legacy" author="agent">
+                            <dropColumn tableName="bookings" columnName="legacy"/>
+                        </changeSet>
+                    </databaseChangeLog>
+                    """,
+                "Drop a column"
+            ))
+        );
+
+        assertThat(adapter.apply(workspace, proposal).isLeft()).isTrue();
+    }
+
+    private String addMigrationFile() throws Exception {
+        String migrationPath =
+            "eu/eu-app/src/main/resources/db/changelog/changes/2026-08.xml";
+        Files.createDirectories(repository.resolve(migrationPath).getParent());
+        Files.writeString(repository.resolve(migrationPath), """
+            <databaseChangeLog>
+            </databaseChangeLog>
+            """);
+        command(repository, "git", "add", "--", migrationPath);
+        command(
+            repository,
+            "git", "-c", "user.name=Test", "-c", "user.email=test@localhost",
+            "commit", "-m", "add migration"
+        );
+        baseCommit = command(repository, "git", "rev-parse", "HEAD").trim();
+        return migrationPath;
     }
 
     private Proposal proposalWithLines(int lineCount) {

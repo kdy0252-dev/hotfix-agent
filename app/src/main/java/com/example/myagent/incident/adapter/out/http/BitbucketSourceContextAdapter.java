@@ -5,6 +5,7 @@ import com.example.myagent.global.support.SensitiveEvidenceRedactor;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisEvidence;
 import com.example.myagent.incident.application.domain.model.analysis.SourceContext;
 import com.example.myagent.incident.application.domain.model.analysis.SourceRevision;
+import com.example.myagent.incident.application.domain.model.policy.MigrationSafetyPolicy;
 import com.example.myagent.incident.application.port.out.IncidentFailure;
 import com.example.myagent.incident.application.port.out.SourceContextPort;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,8 +44,12 @@ public class BitbucketSourceContextAdapter implements SourceContextPort {
         "(?:[a-zA-Z0-9._$-]+/)+(?:src/(?:main|test)/(?:java|kotlin)/)"
             + "[a-zA-Z0-9._$/-]+\\.(?:java|kt)"
     );
+    private static final Pattern MIGRATION_PATH = Pattern.compile(
+        "(?i)(?=[a-zA-Z0-9._$/-]*(?:migration|liquibase|changelog))"
+            + "(?:[a-zA-Z0-9._$-]+/)+[a-zA-Z0-9._$/-]+\\.(?:sql|xml|yaml|yml)"
+    );
     private static final Pattern FILE_REFERENCE = Pattern.compile(
-        "([A-Za-z_$][A-Za-z0-9_$-]*\\.(?:java|kt))(?::(\\d+))?"
+        "([A-Za-z_$][A-Za-z0-9_$-]*\\.(?:java|kt|sql|xml|yaml|yml))(?::(\\d+))?"
     );
     private static final Pattern QUALIFIED_CLASS = Pattern.compile(
         "(?:[a-z_][A-Za-z0-9_$]*\\.)+([A-Z][A-Za-z0-9_$]*)"
@@ -53,8 +58,8 @@ public class BitbucketSourceContextAdapter implements SourceContextPort {
         "\\.([a-zA-Z_$][A-Za-z0-9_$]*)\\("
     );
     private static final Set<String> FORBIDDEN_PARTS = Set.of(
-        "migration", "liquibase", "changelog", "secret", "jenkinsfile",
-        "kubernetes", "/k8s/", "/helm/", "manifest", "fms-deploy"
+        "secret", "jenkinsfile", "kubernetes", "/k8s/", "/helm/", "manifest",
+        "fms-deploy"
     );
 
     private final BitbucketProperties properties;
@@ -101,19 +106,24 @@ public class BitbucketSourceContextAdapter implements SourceContextPort {
         SourceHints hints
     ) throws Exception {
         var paths = new LinkedHashSet<String>();
-        var matcher = SOURCE_PATH.matcher(evidence.toString());
-        while (matcher.find() && paths.size() < MAXIMUM_FILES) {
-            String path = normalize(matcher.group());
-            if (path.startsWith("eu/") && !isForbidden(path)) {
-                paths.add(path);
-            }
-        }
+        addEvidencePaths(paths, SOURCE_PATH, evidence.toString());
+        addEvidencePaths(paths, MIGRATION_PATH, evidence.toString());
         if (evidence instanceof AnalysisEvidence.Observability && paths.size() < MAXIMUM_FILES) {
             discoverSourcePaths(sourceRevision.commit(), hints.fileNames()).stream()
                 .filter(path -> paths.size() < MAXIMUM_FILES)
                 .forEach(paths::add);
         }
         return paths;
+    }
+
+    private void addEvidencePaths(Set<String> paths, Pattern pattern, String evidence) {
+        var matcher = pattern.matcher(evidence);
+        while (matcher.find() && paths.size() < MAXIMUM_FILES) {
+            String path = normalize(matcher.group());
+            if (path.startsWith("eu/") && !isForbidden(path)) {
+                paths.add(path);
+            }
+        }
     }
 
     private Set<String> discoverSourcePaths(String commit, Set<String> fileNames)
@@ -208,12 +218,13 @@ public class BitbucketSourceContextAdapter implements SourceContextPort {
 
     private boolean isAllowedSourcePath(String path) {
         String normalized = normalize(path);
+        boolean applicationSource = (normalized.contains("/src/main/java/")
+            || normalized.contains("/src/test/java/")
+            || normalized.contains("/src/main/kotlin/")
+            || normalized.contains("/src/test/kotlin/"))
+            && (normalized.endsWith(".java") || normalized.endsWith(".kt"));
         return normalized.startsWith("eu/")
-            && (normalized.contains("/src/main/java/")
-                || normalized.contains("/src/test/java/")
-                || normalized.contains("/src/main/kotlin/")
-                || normalized.contains("/src/test/kotlin/"))
-            && (normalized.endsWith(".java") || normalized.endsWith(".kt"))
+            && (applicationSource || MigrationSafetyPolicy.isMigrationPath(normalized))
             && !isForbidden(normalized);
     }
 

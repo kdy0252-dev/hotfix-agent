@@ -72,6 +72,30 @@ class BitbucketSourceContextAdapterTest {
     }
 
     @Test
+    void readsAnEvidenceScopedMigrationAtTheFixedCommit() {
+        String migrationPath =
+            "eu/eu-app/src/main/resources/db/changelog/changes/2026-08.xml";
+        server.createContext(
+            "/2.0/repositories/autocrypt/fms/src/abc123/" + migrationPath,
+            exchange -> serveText(exchange, "<databaseChangeLog/>\n")
+        );
+        var evidence = new AnalysisEvidence.Jenkins(
+            "https://jenkins.example/build/181",
+            "abc123",
+            List.of("at /workspace/fms/" + migrationPath + ":12"),
+            "migration failed",
+            List.of("jenkins:181")
+        );
+
+        var result = adapter.read(
+            evidence,
+            new SourceRevision("abc123", "main", "bitbucket:branch:main")
+        ).get();
+
+        assertThat(result.files()).containsEntry(migrationPath, "<databaseChangeLog/>\n");
+    }
+
+    @Test
     void discoversMultipleObservabilitySourceFilesAndKeepsRelevantLines() {
         String mapperPath = "eu/booking/src/main/java/example/BookingMapper.java";
         String servicePath = "eu/booking/src/main/java/example/BookingService.java";
