@@ -12,6 +12,7 @@ import com.example.myagent.command.application.domain.model.execution.CommandExe
 import com.example.myagent.command.application.domain.model.interpretation.CommandInterpretation;
 import com.example.myagent.command.application.domain.model.interpretation.InterpretationStatus;
 import com.example.myagent.command.application.port.out.CommandInterpretationStatePort.StateEntry;
+import com.example.myagent.command.application.port.out.CommandInterpretationStatePort.RequestPayload;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,11 @@ class CommandStateEntityMappingTest {
 
     @Test
     void restoresTypedInterpretationFromRelationalColumns() {
-        var entry = new StateEntry("key-1", "body-hash", interpretation());
+        var entry = new StateEntry(
+            "key-1",
+            new RequestPayload("body-hash", "redacted request"),
+            interpretation()
+        );
 
         var restored = CommandInterpretationEntity.from(entry).toDomain();
 

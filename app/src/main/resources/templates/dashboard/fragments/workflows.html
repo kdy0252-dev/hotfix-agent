@@ -78,6 +78,7 @@
                     Details
                 </button>
                 <form class="candidate-refinement-form"
+                      th:if="${work.candidate.refinement == null or !work.candidate.refinement.active()}"
                       th:attr="hx-post=@{/ui/analyses/{analysisId}/candidates/{candidateId}/refinement(
                           analysisId=${item.storedAnalysis.analysis.identity.analysisId},
                           candidateId=${work.candidate.candidateId})}"
@@ -89,6 +90,23 @@
                         <span>정밀 AI 분석</span><i aria-hidden="true"></i>
                     </button>
                 </form>
+                <div class="candidate-refinement-progress"
+                     th:if="${work.candidate.refinement != null and work.candidate.refinement.active()}">
+                    <div class="command-progress-label">
+                        <i aria-hidden="true"></i>
+                        <span th:text="${work.candidate.refinement.status == 'REQUESTED'
+                            ? '정밀 AI 분석을 시작하고 있습니다…'
+                            : '소스 위치와 원인 라인을 정밀 분석하고 있습니다…'}">
+                            정밀 AI 분석 중…
+                        </span>
+                    </div>
+                    <span class="command-progress-bar" aria-hidden="true"><i></i></span>
+                </div>
+                <div class="refinement-failure"
+                     th:if="${work.candidate.refinement != null and work.candidate.refinement.status == 'FAILED'}">
+                    <strong>정밀 AI 분석 실패</strong>
+                    <span th:text="${work.candidate.refinement.failureReason}">다시 요청해 주세요.</span>
+                </div>
             </div>
 
             <dialog class="detail-modal"

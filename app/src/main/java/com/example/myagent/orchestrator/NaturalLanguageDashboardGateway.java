@@ -8,6 +8,8 @@ import org.springframework.modulith.NamedInterface;
 public interface NaturalLanguageDashboardGateway {
     InterpretationPreview interpret(InterpretationCommand command);
 
+    InterpretationPreview interpretation(String interpretationId);
+
     ExecutionResult execute(ExecutionCommand command);
 
     record InterpretationCommand(String text, String idempotencyKey) {

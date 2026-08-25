@@ -1,31 +1,31 @@
 # my-agent
 
-`autocrypt/fms`의 Jenkins 빌드 실패와 Grafana 관측 증거를 분석하고, 사용자가 선택한 버그 후보만
-제한된 범위에서 수정하여 Bitbucket Draft PR로 발행하는 로컬 Spring Boot 애플리케이션이다.
+환경변수로 지정한 저장소의 Jenkins 빌드 실패와 Grafana 관측 증거를 분석하고, 사용자가 선택한
+버그 후보만 제한된 범위에서 수정하여 Bitbucket Draft PR로 발행하는 로컬 Spring Boot 애플리케이션이다.
 LLM orchestration은 Embabel을 사용하고 모델 호출은 사내 LiteLLM OpenAI-compatible API를 통한다.
 
 ## 현재 구현 상태
 
-- Jenkins `FMS-EU` 실패 build 분석 API
-- Grafana Loki, Tempo, Prometheus와 alert를 이용한 `DEV`, `QA`, `PROD`의 `eu-app` 분석 API
+- 설정된 Jenkins root job의 실패 build 분석 API
+- Grafana Loki, Tempo, Prometheus와 alert를 이용한 설정 서비스 범위의 관측 분석 API
 - branch 또는 open PR source commit 고정과 Bitbucket source context 조회
 - 선택 가능한 `BugCandidate` 생성과 명시적 후보 선택
 - 격리된 `agent/hotfix/*` worktree에서 최대 10개 파일·500줄 수정
 - focused Gradle 검증, 독립 AI review, Jenkins 동등 로컬 parity 검증
 - Gradle/coverage/Jib/Compose health/Newman 전체 통과 후 reviewer 없는 Draft PR 생성
 - Draft PR Jenkins 상태의 명시적 1회 갱신 API
-- 자연어 해석과 version/hash 확인 실행이 분리된 API
+- 자연어 해석과 후보 정밀분석을 DB 작업으로 접수하고 재기동 후 이어서 실행하는 비동기 API
+- 직전 실패 PR·우선순위 목록을 기억하는 대화형 UI와 시급 작업·정밀분석 우선순위 안내
 - HTMX 기반 SSR 운영 UI: 실패 PR, Grafana 알람·Trace, 자연어 실행과 Draft 진행 상태
 - Langfuse PostgreSQL의 분리된 `hotfix_agent` 스키마 상태 저장, idempotency, LLM budget과 재시도 제한
+- 사용자 표시 시각 KST 통일과 환경변수 기반 관측 대상 서비스 범위
 - Embabel AI mock 및 LiteLLM judge/Langfuse 평가
-
-2026-08-21에 FMS PR #1292의 의도적 컴파일 실패를 대상으로 전체 흐름을 검증했다. 로컬 parity 4단계와
-Newman 본 스위트 20건이 모두 성공한 뒤 Bitbucket Draft PR #1295가 생성됐다.
 
 ## 안전 경계
 
 - 자동 polling, merge, approve, tag, release, deploy와 rollback을 제공하지 않는다.
-- migration, secret, `Jenkinsfile`, Kubernetes/Helm/배포 manifest는 수정하지 않는다.
+- secret, `Jenkinsfile`, Kubernetes/Helm/배포 manifest는 수정하지 않는다.
+- migration은 확장적이고 하위 호환되는 변경만 허용한다.
 - 원본 branch나 원본 PR source branch에 직접 push하지 않는다.
 - Grafana와 Jenkins는 읽기 전용이며 Jenkins build를 trigger하거나 중단하지 않는다.
 - 분석만으로는 Git write를 수행하지 않는다. 사용자가 후보 ID와 분석 version을 선택해야 hotfix가 시작된다.
@@ -58,7 +58,7 @@ my-agent/
 
 - Java 25
 - Docker Desktop
-- `~/workspace/fms` 또는 `AGENT_FMS_REPOSITORY_PATH`가 가리키는 FMS Git 저장소
+- `AGENT_FMS_REPOSITORY_PATH`가 가리키는 대상 Git 저장소
 - Bitbucket access token, Jenkins API token, Grafana service account token, LiteLLM API key
 
 Jenkins와 Grafana의 사설 인증서는 시연 환경에 한해 `*_TLS_VERIFY=false`를 사용한다.
@@ -72,6 +72,8 @@ Jenkins와 Grafana의 사설 인증서는 시연 환경에 한해 `*_TLS_VERIFY=
 스크립트는 자격증명을 숨김 입력으로 받아 Git 비추적 파일 `.env.local`을 권한 `600`으로 생성한다.
 Grafana datasource UID는 API로 자동 탐색하고 LiteLLM 모델은 프로젝트 model registry와 대조한다.
 변수 목록과 기본값은 [.env.local.example](.env.local.example)을 참고한다.
+관측 대상은 `OBSERVABILITY_SERVICE_DISPLAY_NAME`, `OBSERVABILITY_NAMESPACE_TEMPLATE`,
+`OBSERVABILITY_SERVICE_NAME_TEMPLATE`으로 바꿀 수 있다. 환경 문자열이 들어갈 위치에는 `%s`를 사용한다.
 
 Embabel 실행에서는 `LITELLM_API_KEY`를 사용한다. Docker entrypoint와 로컬 실행 스크립트는
 OpenAI-compatible SDK가 다른 키를 우선하지 않도록 프로세스의 `OPENAI_API_KEY`도 LiteLLM 키로
@@ -101,7 +103,7 @@ curl --fail http://127.0.0.1:8080/actuator/health
 이 명령은 Docker Compose 프로젝트 `my-agent-ai-test`에 백엔드, Langfuse와 저장소 서비스를 함께
 기동한다. 백엔드는 `http://127.0.0.1:8080`, Langfuse는 `http://127.0.0.1:13000`에서 확인한다.
 
-Compose는 FMS 저장소, `.agent/runtime`, Gradle cache와 Docker socket을 연결한다. Docker Desktop에서
+Compose는 대상 저장소, `.agent/runtime`, Gradle cache와 Docker socket을 연결한다. Docker Desktop에서
 Testcontainers는 `host.docker.internal`을 사용하며 Newman fixture와 Compose volume은
 `AGENT_NEWMAN_WORKSPACE_ROOT`의 호스트 절대 경로를 사용한다.
 

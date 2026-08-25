@@ -7,6 +7,32 @@ import org.junit.jupiter.api.Test;
 
 class DashboardViewTest {
     @Test
+    void formatsBuildTimestampsForKoreanUsers() {
+        var build = new DashboardView.BuildReference(
+            "job/PR-1",
+            1,
+            "FAILURE",
+            Instant.parse("2026-08-24T09:41:42.402Z"),
+            "https://jenkins.example/job/PR-1/1"
+        );
+
+        assertThat(build.timestampKstLabel()).isEqualTo("2026-08-24 18:41:42 KST");
+    }
+
+    @Test
+    void formatsObservabilityTimestampsForKoreanUsers() {
+        var signal = new DashboardView.ObservabilitySignal(
+            "STACK_TRACE",
+            "운영 로그 에러",
+            "오류를 감지했습니다.",
+            Instant.parse("2026-08-24T09:41:42.402Z"),
+            new DashboardView.SignalReference(null, "detail", "Loki", "https://grafana.example")
+        );
+
+        assertThat(signal.occurredAtKstLabel()).isEqualTo("2026-08-24 18:41:42 KST");
+    }
+
+    @Test
     void classifiesAnErrorTitleAsErrorEvenWhenTechnicalDetailsContainWarn() {
         var signal = new DashboardView.ObservabilitySignal(
             "STACK_TRACE",

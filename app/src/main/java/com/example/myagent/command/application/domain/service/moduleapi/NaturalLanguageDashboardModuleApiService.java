@@ -2,6 +2,7 @@ package com.example.myagent.command.application.domain.service.moduleapi;
 
 import com.example.myagent.command.application.domain.model.interpretation.CommandInterpretation;
 import com.example.myagent.command.application.port.in.ExecuteNaturalLanguageCommandUseCase;
+import com.example.myagent.command.application.port.in.GetCommandInterpretationUseCase;
 import com.example.myagent.command.application.port.in.InterpretNaturalLanguageCommandUseCase;
 import com.example.myagent.orchestrator.NaturalLanguageDashboardGateway;
 import java.util.List;
@@ -12,13 +13,21 @@ public class NaturalLanguageDashboardModuleApiService
     implements NaturalLanguageDashboardGateway {
     private final InterpretNaturalLanguageCommandUseCase interpretUseCase;
     private final ExecuteNaturalLanguageCommandUseCase executeUseCase;
+    private final GetCommandInterpretationUseCase getUseCase;
 
     public NaturalLanguageDashboardModuleApiService(
         InterpretNaturalLanguageCommandUseCase interpretUseCase,
-        ExecuteNaturalLanguageCommandUseCase executeUseCase
+        ExecuteNaturalLanguageCommandUseCase executeUseCase,
+        GetCommandInterpretationUseCase getUseCase
     ) {
         this.interpretUseCase = interpretUseCase;
         this.executeUseCase = executeUseCase;
+        this.getUseCase = getUseCase;
+    }
+
+    @Override
+    public InterpretationPreview interpretation(String interpretationId) {
+        return preview(getUseCase.get(interpretationId));
     }
 
     @Override

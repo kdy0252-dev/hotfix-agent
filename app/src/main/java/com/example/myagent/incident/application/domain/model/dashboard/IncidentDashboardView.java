@@ -146,7 +146,14 @@ public final class IncidentDashboardView {
         String title,
         String rootCause,
         double confidence,
-        String eligibility
+        String eligibility,
+        Refinement refinement
     ) {
+    }
+
+    public record Refinement(String status, String failureReason) {
+        public boolean active() {
+            return "REQUESTED".equals(status) || "RUNNING".equals(status);
+        }
     }
 }

@@ -6,6 +6,7 @@ import com.example.myagent.command.application.domain.model.command.InterpretedC
 import com.example.myagent.command.application.domain.model.command.SourceReference;
 import com.example.myagent.command.application.domain.model.interpretation.CommandInterpretation;
 import com.example.myagent.command.application.domain.model.interpretation.InterpretationStatus;
+import com.example.myagent.command.application.port.out.CommandInterpretationStatePort.RequestPayload;
 import com.example.myagent.command.application.port.out.CommandInterpretationStatePort.StateEntry;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -33,6 +34,8 @@ public class CommandInterpretationEntity {
     private String idempotencyKey;
     @Column(name = "request_body_hash", nullable = false)
     private String requestBodyHash;
+    @Column(name = "redacted_request_text")
+    private String redactedRequestText;
     @Column(name = "request_digest", nullable = false)
     private String requestDigest;
     @Column(name = "redacted_preview", nullable = false)
@@ -116,7 +119,8 @@ public class CommandInterpretationEntity {
         entity.interpretationId = metadata.interpretationId();
         entity.version = metadata.version();
         entity.idempotencyKey = entry.idempotencyKey();
-        entity.requestBodyHash = entry.requestBodyHash();
+        entity.requestBodyHash = entry.request().bodyHash();
+        entity.redactedRequestText = entry.request().redactedText();
         entity.requestDigest = metadata.request().digest();
         entity.redactedPreview = metadata.request().redactedPreview();
         entity.createdAt = metadata.timing().createdAt();
@@ -163,7 +167,7 @@ public class CommandInterpretationEntity {
         );
         return new StateEntry(
             idempotencyKey,
-            requestBodyHash,
+            new RequestPayload(requestBodyHash, redactedRequestText),
             new CommandInterpretation(metadata, decision)
         );
     }

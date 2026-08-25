@@ -57,7 +57,7 @@ class DashboardInteractionContractTest {
         String favicon = resource("static/favicon.svg");
 
         assertThat(dashboard).contains("rel=\"icon\" type=\"image/svg+xml\"");
-        assertThat(favicon).contains("<svg", "aria-label=\"FMS Hotfix\"");
+        assertThat(favicon).contains("<svg", "aria-label=\"Hotfix Agent\"");
     }
 
     @Test

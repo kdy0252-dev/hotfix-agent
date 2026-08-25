@@ -14,10 +14,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.myagent.dashboard.application.domain.model.view.DashboardView;
 import com.example.myagent.dashboard.application.port.in.DashboardUseCase;
+import com.example.myagent.global.configuration.ObservabilityScopeProperties;
 import jakarta.validation.Validation;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +36,16 @@ class DashboardControllerTest {
     void setUp() {
         dashboardUseCase = mock(DashboardUseCase.class);
         var validator = Validation.buildDefaultValidatorFactory().getValidator();
-        mockMvc = MockMvcBuilders.standaloneSetup(new DashboardController(dashboardUseCase))
+        var observabilityScope = new ObservabilityScopeProperties(
+            "eu",
+            "app",
+            "Booking API",
+            "fms-eu-%s",
+            "fms-eu-%s-app"
+        );
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                new DashboardController(dashboardUseCase, observabilityScope)
+            )
             .setControllerAdvice(new DashboardExceptionHandler())
             .setValidator(new SpringValidatorAdapter(validator))
             .build();
@@ -48,7 +59,8 @@ class DashboardControllerTest {
             .andExpect(model().attributeExists(
                 "startAt",
                 "endAt",
-                "commandIdempotencyKey"
+                "commandIdempotencyKey",
+                "observabilityServiceName"
             ));
     }
 
@@ -297,6 +309,32 @@ class DashboardControllerTest {
     }
 
     @Test
+    void carriesTheLatestFailedPullRequestContextIntoAFollowUpMessage() throws Exception {
+        var preview = confirmablePreview();
+        when(dashboardUseCase.interpretNaturalLanguage(any())).thenReturn(preview);
+        when(dashboardUseCase.executeNaturalLanguage(any())).thenReturn(
+            new DashboardView.ExecutionResult(
+                "analysis-1",
+                "ANALYSIS_REQUESTED",
+                "/api/v1/analyses/analysis-1",
+                List.of()
+            )
+        );
+        when(dashboardUseCase.getAnalysis("analysis-1")).thenReturn(analysis("ANALYZING"));
+
+        mockMvc.perform(post("/ui/natural-language/interpretations")
+                .param("text", "그럼 그거 이슈 분석좀 해줄래?")
+                .param("conversationContext", "LATEST_FAILED_PULL_REQUEST")
+                .param("idempotencyKey", "follow-up-key"))
+            .andExpect(status().isOk());
+
+        var command = ArgumentCaptor.forClass(DashboardUseCase.InterpretationCommand.class);
+        verify(dashboardUseCase).interpretNaturalLanguage(command.capture());
+        assertThat(command.getValue().text())
+            .isEqualTo("최근 실패 빌드 그럼 그거 이슈 분석좀 해줄래?");
+    }
+
+    @Test
     void immediatelyStartsJenkinsAnalysisInsideTheChatWithoutAConfirmationCard()
         throws Exception {
         var preview = confirmablePreview();
@@ -393,6 +431,70 @@ class DashboardControllerTest {
             .andExpect(status().isOk())
             .andExpect(view().name("dashboard/fragments/chat-failed-pull-requests"))
             .andExpect(model().attribute("pullRequests", List.of(failedPullRequest())));
+    }
+
+    @Test
+    void proposesTheHighestConfidenceUnstartedCandidateForUrgentWork() throws Exception {
+        var workflow = workflowWithCandidate();
+        when(dashboardUseCase.getMostUrgentCandidate()).thenReturn(Optional.of(
+            new DashboardView.CandidatePriority(
+                workflow,
+                workflow.candidateWorkflows().getFirst(),
+                1,
+                "자동 수정 가능한 후보 중 신뢰도가 가장 높습니다."
+            )
+        ));
+
+        mockMvc.perform(post("/ui/natural-language/interpretations")
+                .param("text", "최근 분석한 작업 중 제일 시급한 거 진행해줘")
+                .param("idempotencyKey", "urgent-key"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("dashboard/fragments/chat-workflow-reference"))
+            .andExpect(model().attribute("workflow", workflow))
+            .andExpect(model().attribute("requestedCandidateNumber", 1))
+            .andExpect(model().attributeExists("selectedCandidate"));
+    }
+
+    @Test
+    void listsCandidatesThatNeedPrecisionAnalysis() throws Exception {
+        when(dashboardUseCase.getRefinementPriorities()).thenReturn(List.of());
+
+        mockMvc.perform(post("/ui/natural-language/interpretations")
+                .param("text", "정밀분석 필요한 우선순위 알려줘")
+                .param("idempotencyKey", "priority-key"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("dashboard/fragments/chat-refinement-priorities"))
+            .andExpect(model().attribute("priorityCandidates", List.of()));
+    }
+
+    @Test
+    void startsCandidateRefinementFromAConversationalReference() throws Exception {
+        var workflow = workflowWithCandidate();
+        when(dashboardUseCase.getWorkflowItems()).thenReturn(List.of(workflow));
+
+        mockMvc.perform(post("/ui/natural-language/interpretations")
+                .param("text", "24e37bee 1번 정밀 분석해줘")
+                .param("idempotencyKey", "refinement-key"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("dashboard/fragments/chat-workflow-reference"));
+
+        verify(dashboardUseCase).refineCandidate(any());
+    }
+
+    @Test
+    void keepsTheTopRefinementPriorityAsConversationContext() throws Exception {
+        var workflow = workflowWithCandidate();
+        when(dashboardUseCase.getWorkflowItems()).thenReturn(List.of(workflow));
+
+        mockMvc.perform(post("/ui/natural-language/interpretations")
+                .param("text", "그럼 1번 정밀 분석해줘")
+                .param("conversationContext",
+                    "REFINEMENT_PRIORITY|24e37bee-eae1-4dc4-bf7c-c78e9956ba3d|1")
+                .param("idempotencyKey", "refinement-follow-up-key"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("dashboard/fragments/chat-workflow-reference"));
+
+        verify(dashboardUseCase).refineCandidate(any());
     }
 
     @Test
@@ -538,7 +640,8 @@ class DashboardControllerTest {
             "Missing class",
             "Referenced class is missing.",
             0.9,
-            "ELIGIBLE"
+            "ELIGIBLE",
+            null
         );
         return new DashboardView.WorkflowItem(
             new DashboardView.StoredAnalysis(

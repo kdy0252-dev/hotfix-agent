@@ -58,7 +58,7 @@ public class NaturalLanguageCommandController {
             "/api/v1/natural-language/interpretations/"
                 + interpretation.metadata().interpretationId()
         );
-        return ResponseEntity.created(location).body(interpretation);
+        return ResponseEntity.accepted().location(location).body(interpretation);
     }
 
     @GetMapping("/{interpretationId}")

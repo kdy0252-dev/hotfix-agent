@@ -69,7 +69,7 @@ class IncidentControllerContractTest {
         mockMvc.perform(post("/api/v1/analyses/analysis-1/candidates/candidate-1/refinement")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"analysisVersion\":1}"))
-            .andExpect(status().isOk())
+            .andExpect(status().isAccepted())
             .andExpect(jsonPath("$.identity.analysisId").value("analysis-1"));
     }
 

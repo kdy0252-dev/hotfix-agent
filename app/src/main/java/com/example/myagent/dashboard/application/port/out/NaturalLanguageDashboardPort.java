@@ -8,6 +8,10 @@ public interface NaturalLanguageDashboardPort {
         InterpretationCommand command
     );
 
+    Either<DashboardFailure, DashboardView.InterpretationPreview> interpretation(
+        String interpretationId
+    );
+
     Either<DashboardFailure, DashboardView.ExecutionResult> execute(ExecutionCommand command);
 
     record InterpretationCommand(String text, String idempotencyKey) {

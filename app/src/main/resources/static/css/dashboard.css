@@ -887,6 +887,35 @@ span.flatpickr-weekday {
     display: inline-flex;
 }
 
+.candidate-refinement-progress {
+    display: grid;
+    gap: .55rem;
+    min-width: min(100%, 22rem);
+    margin-top: .75rem;
+}
+
+.candidate-refinement-progress .command-progress-bar,
+.natural-language-interpretation .command-progress-bar {
+    display: block;
+}
+
+.refinement-failure {
+    display: flex;
+    gap: .6rem;
+    align-items: center;
+    margin-top: .75rem;
+    color: var(--danger);
+}
+
+.natural-language-interpretation .active-agent {
+    display: grid;
+    grid-template-columns: auto 1fr;
+}
+
+.natural-language-interpretation .active-agent .command-progress-bar {
+    grid-column: 1 / -1;
+}
+
 .refinement-request-button {
     display: inline-flex;
     align-items: center;

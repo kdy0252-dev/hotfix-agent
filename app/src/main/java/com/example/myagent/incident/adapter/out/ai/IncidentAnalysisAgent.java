@@ -16,7 +16,7 @@ import java.util.Locale;
 
 @Agent(
     name = "incident-analysis-agent",
-    description = "Creates evidence-grounded bug candidates from Jenkins or EU app observability evidence",
+    description = "Creates evidence-grounded bug candidates from Jenkins or service observability evidence",
     beanName = "incidentAnalysisAgent",
     actionRetryPolicy = ActionRetryPolicy.FIRE_ONCE
 )
@@ -45,7 +45,7 @@ public class IncidentAnalysisAgent {
         );
     }
 
-    @Action(description = "Triage bounded EU app observability evidence", readOnly = true)
+    @Action(description = "Triage bounded target service observability evidence", readOnly = true)
     public TriageSummary triageObservability(
         ObservabilityAnalysisInput input,
         OperationContext context
@@ -54,7 +54,7 @@ public class IncidentAnalysisAgent {
             new TriageMaterial(
                 "OBSERVABILITY",
                 "Correlate metrics, traces, logs, alerts, and retrieved source locations by time "
-                    + "without changing the EU app scope.",
+                    + "without changing the configured service scope.",
                 input.evidence().toString(),
                 input.evidence().evidenceRefs()
             ),

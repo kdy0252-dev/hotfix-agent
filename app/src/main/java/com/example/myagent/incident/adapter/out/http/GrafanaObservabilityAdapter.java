@@ -19,6 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -46,6 +48,9 @@ public class GrafanaObservabilityAdapter implements
     private static final Duration MAX_OBSERVATION_RANGE = Duration.ofDays(31);
     private static final Duration MAX_LOKI_QUERY_RANGE = Duration.ofDays(7);
     private static final Duration MAX_TEMPO_SEARCH_RANGE = Duration.ofDays(7);
+    private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter KOREA_DATE_TIME =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'KST'");
     private static final Pattern TRACE_ID_PATTERN = Pattern.compile(
         "(?i)trace(?:[_-]?id)?[\\s\\\"']*[:=][\\s\\\"']*"
             + "([0-9a-f]{16}|[0-9a-f]{32})(?![0-9a-f])"
@@ -319,7 +324,8 @@ public class GrafanaObservabilityAdapter implements
         Instant occurredAt = Try.of(() -> Instant.ofEpochMilli(time.asLong()))
             .getOrElse(query.endAt().toInstant());
         boolean error = isErrorSeverity(severity);
-        String title = error ? "EU 앱 운영 로그 에러" : "EU 앱 운영 로그 경고";
+        String title = scopeProperties.displayName()
+            + (error ? " 운영 로그 에러" : " 운영 로그 경고");
         String summary = error
             ? "운영 로그에서 오류를 감지했습니다. Details에서 원문과 Trace ID를 확인하세요."
             : "운영 로그에서 경고를 감지했습니다. Details에서 원문과 Trace ID를 확인하세요.";
@@ -365,7 +371,7 @@ public class GrafanaObservabilityAdapter implements
 
     private String formatLogObject(JsonNode log) {
         String fields = List.of(
-            new LogField("발생 시각", log.path("@timestamp").asString()),
+            new LogField("발생 시각", kstLabel(log.path("@timestamp").asString())),
             new LogField("레벨", log.path("level").asString()),
             new LogField("메시지", log.path("message").asString()),
             new LogField("로거", log.path("logger_name").asString()),
@@ -539,7 +545,14 @@ public class GrafanaObservabilityAdapter implements
         }
         boolean httpRequest = normalized.startsWith("http ")
             || normalized.matches("(get|post|put|patch|delete) /.*");
-        return httpRequest ? "EU 앱 HTTP 요청" : "EU 앱 요청 Trace";
+        return scopeProperties.displayName()
+            + (httpRequest ? " HTTP 요청" : " 요청 Trace");
+    }
+
+    private String kstLabel(String timestamp) {
+        return Try.of(() -> Instant.parse(timestamp))
+            .map(instant -> KOREA_DATE_TIME.format(instant.atZone(KOREA_ZONE)))
+            .getOrElse(timestamp);
     }
 
     private boolean errorSpan(JsonNode span) {

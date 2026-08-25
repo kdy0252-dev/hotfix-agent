@@ -75,7 +75,7 @@ public class IncidentController {
     }
 
     @PostMapping("/analyses/observability")
-    @Operation(summary = "Analyze EU app Grafana evidence in an explicit time range")
+    @Operation(summary = "Analyze target service Grafana evidence in an explicit time range")
     public ResponseEntity<AcceptedResource> analyzeObservability(
         @RequestHeader("Idempotency-Key") @NotBlank String idempotencyKey,
         @Valid @RequestBody ObservabilityAnalysisRequest request
@@ -134,7 +134,7 @@ public class IncidentController {
         @PathVariable @NotBlank String candidateId,
         @Valid @RequestBody CandidateRefinementRequest request
     ) {
-        return ResponseEntity.ok(refineCandidateUseCase.refine(
+        return ResponseEntity.accepted().body(refineCandidateUseCase.refine(
             new RefineCandidateUseCase.RefinementCommand(
                 analysisId,
                 request.analysisVersion(),

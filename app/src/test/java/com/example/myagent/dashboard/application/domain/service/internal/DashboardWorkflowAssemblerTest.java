@@ -114,7 +114,8 @@ class DashboardWorkflowAssemblerTest {
             "Possible classpath issue",
             "The source location is not confirmed.",
             0.3,
-            eligibility
+            eligibility,
+            null
         );
     }
 

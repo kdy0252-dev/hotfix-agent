@@ -1,6 +1,7 @@
 package com.example.myagent.dashboard.application.domain.service;
 
 import com.example.myagent.dashboard.application.domain.model.view.DashboardView;
+import com.example.myagent.dashboard.application.domain.service.internal.ConversationPriorityResolver;
 import com.example.myagent.dashboard.application.domain.service.internal.DashboardWorkflowAssembler;
 import com.example.myagent.dashboard.application.domain.service.internal.NaturalLanguageRequestEnricher;
 import com.example.myagent.dashboard.application.port.in.DashboardUseCase;
@@ -9,6 +10,7 @@ import com.example.myagent.dashboard.application.port.out.DashboardFailure;
 import com.example.myagent.dashboard.application.port.out.IncidentDashboardPort;
 import com.example.myagent.dashboard.application.port.out.NaturalLanguageDashboardPort;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -17,17 +19,20 @@ public class DashboardQueryService implements DashboardUseCase {
     private final NaturalLanguageDashboardPort naturalLanguageDashboardPort;
     private final DashboardWorkflowAssembler workflowAssembler;
     private final NaturalLanguageRequestEnricher requestEnricher;
+    private final ConversationPriorityResolver priorityResolver;
 
     public DashboardQueryService(
         IncidentDashboardPort incidentDashboardPort,
         NaturalLanguageDashboardPort naturalLanguageDashboardPort,
         DashboardWorkflowAssembler workflowAssembler,
-        NaturalLanguageRequestEnricher requestEnricher
+        NaturalLanguageRequestEnricher requestEnricher,
+        ConversationPriorityResolver priorityResolver
     ) {
         this.incidentDashboardPort = incidentDashboardPort;
         this.naturalLanguageDashboardPort = naturalLanguageDashboardPort;
         this.workflowAssembler = workflowAssembler;
         this.requestEnricher = requestEnricher;
+        this.priorityResolver = priorityResolver;
     }
 
     @Override
@@ -92,9 +97,23 @@ public class DashboardQueryService implements DashboardUseCase {
 
     @Override
     public List<DashboardView.WorkflowItem> getWorkflowItems() {
+        return workflowItems();
+    }
+
+    private List<DashboardView.WorkflowItem> workflowItems() {
         var analyses = incidentDashboardPort.recentAnalyses().getOrElseThrow(this::failure);
         var hotfixes = incidentDashboardPort.hotfixProgresses().getOrElseThrow(this::failure);
         return workflowAssembler.assemble(analyses, hotfixes);
+    }
+
+    @Override
+    public Optional<DashboardView.CandidatePriority> getMostUrgentCandidate() {
+        return priorityResolver.mostUrgent(workflowItems());
+    }
+
+    @Override
+    public List<DashboardView.CandidatePriority> getRefinementPriorities() {
+        return priorityResolver.refinementPriorities(workflowItems());
     }
 
     @Override
@@ -127,6 +146,14 @@ public class DashboardQueryService implements DashboardUseCase {
                 command.idempotencyKey()
             )
         ).getOrElseThrow(this::failure);
+    }
+
+    @Override
+    public DashboardView.InterpretationPreview getNaturalLanguageInterpretation(
+        String interpretationId
+    ) {
+        return naturalLanguageDashboardPort.interpretation(interpretationId)
+            .getOrElseThrow(this::failure);
     }
 
     @Override

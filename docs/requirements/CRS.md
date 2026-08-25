@@ -93,7 +93,7 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 ### 5.4 운영 UI
 
 1. 사용자는 실패한 open PR branch와 Jenkins build를 목록에서 확인하고 원본 화면으로 이동한다.
-2. 사용자는 환경과 시작/종료 시각을 제출하여 EU app의 운영 알람과 Trace를 조회한다.
+2. 사용자는 환경과 시작/종료 시각을 제출하여 설정된 대상 서비스의 운영 알람과 Trace를 조회한다.
 3. 사용자는 목록의 분석 버튼 또는 자연어 입력으로 해석을 요청하고, 해석 결과를 확인해 실행한다.
 4. 분석 완료 후 사용자가 후보를 선택해야만 Draft PR workflow가 시작된다.
 5. 사용자는 로컬 상태를 통해 patch, 검증, Draft PR과 CI 진행 단계를 확인한다.
@@ -138,7 +138,7 @@ PR reviewer는 시스템이 자동 지정하지 않는다. Draft PR 생성 후 �
 | CRS-FUN-022 | 자연어로 시작한 작업도 기존 구조화 API와 동일한 analysis, candidate selection, Jenkins 동등 검증과 Draft PR 흐름을 사용해야 한다. |
 | CRS-FUN-023 | 자연어 요청에 필수 식별자·시간 범위·환경·source가 없거나 여러 해석이 가능하면 시스템은 실행하지 않고 명확화 항목을 반환해야 한다. |
 | CRS-FUN-024 | 시스템은 실패한 open PR의 branch, commit, Jenkins build와 Bitbucket/Jenkins 링크를 SSR UI에 표시해야 한다. |
-| CRS-FUN-025 | 시스템은 사용자가 제출한 환경·시간 범위의 EU app Grafana 알람과 Trace를 목록으로 표시하고 Grafana 링크를 제공해야 한다. |
+| CRS-FUN-025 | 시스템은 사용자가 제출한 환경·시간 범위의 대상 서비스 Grafana 알람과 Trace를 목록으로 표시하고 Grafana 링크를 제공해야 한다. |
 | CRS-FUN-026 | UI 자연어 입력은 해석 확인과 후보 선택 단계를 거쳐야 하며 한 번의 입력으로 Draft PR을 직접 생성하지 않아야 한다. |
 | CRS-FUN-027 | UI는 Draft PR workflow의 현재 단계와 생성된 Bitbucket/Jenkins 링크를 표시해야 한다. |
 | CRS-FUN-028 | 실패한 workflow는 현재 세부 단계, 실패 코드, 복구 방법과 실행된 검증 결과를 페이지 재로드 후에도 표시해야 한다. |

@@ -3,6 +3,7 @@ package com.example.myagent.dashboard.adapter.in.web;
 import com.example.myagent.dashboard.application.domain.model.view.DashboardView;
 import com.example.myagent.dashboard.application.port.in.DashboardUseCase;
 import com.example.myagent.dashboard.application.port.in.DashboardUseCaseException;
+import com.example.myagent.global.configuration.ObservabilityScopeProperties;
 import io.vavr.control.Try;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -41,9 +42,14 @@ public class DashboardController {
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
     private final DashboardUseCase dashboardUseCase;
+    private final ObservabilityScopeProperties observabilityScope;
 
-    public DashboardController(DashboardUseCase dashboardUseCase) {
+    public DashboardController(
+        DashboardUseCase dashboardUseCase,
+        ObservabilityScopeProperties observabilityScope
+    ) {
         this.dashboardUseCase = dashboardUseCase;
+        this.observabilityScope = observabilityScope;
     }
 
     @GetMapping("/")
@@ -54,6 +60,7 @@ public class DashboardController {
         model.addAttribute("startAt", endAt.minusMinutes(30).format(DATE_TIME_FORMATTER));
         model.addAttribute("endAt", endAt.format(DATE_TIME_FORMATTER));
         model.addAttribute("commandIdempotencyKey", UUID.randomUUID().toString());
+        model.addAttribute("observabilityServiceName", observabilityScope.displayName());
         return "dashboard/index";
     }
 
@@ -214,6 +221,7 @@ public class DashboardController {
             )
         ));
         model.addAttribute("environment", environment);
+        model.addAttribute("observabilityServiceName", observabilityScope.displayName());
         model.addAttribute("startAt", startAt.format(DATE_TIME_FORMATTER));
         model.addAttribute("endAt", endAt.format(DATE_TIME_FORMATTER));
         return "dashboard/fragments/observability";
@@ -433,18 +441,36 @@ public class DashboardController {
     public String interpret(
         @RequestParam @NotBlank @Size(max = 2_000) String text,
         @RequestParam @NotBlank String idempotencyKey,
+        @RequestParam(defaultValue = "") String conversationContext,
         Model model
     ) {
         if (requestsFailedPullRequestList(text)) {
             model.addAttribute("pullRequests", dashboardUseCase.getFailedPullRequests());
             return "dashboard/fragments/chat-failed-pull-requests";
         }
-        Optional<DashboardView.WorkflowItem> referenced = referencedWorkflow(text);
+        if (requestsRefinementPriorities(text)) {
+            model.addAttribute("priorityCandidates", dashboardUseCase.getRefinementPriorities());
+            return "dashboard/fragments/chat-refinement-priorities";
+        }
+        if (requestsMostUrgentWork(text)) {
+            return mostUrgentWork(model);
+        }
+        String contextualizedText = contextualizedText(text, conversationContext);
+        Optional<DashboardView.WorkflowItem> referenced = referencedWorkflow(contextualizedText);
         if (referenced.isPresent()) {
-            return workflowReferenceFragment(model, referenced.get(), candidateNumber(text));
+            Integer requestedCandidateNumber = candidateNumber(contextualizedText);
+            if (requestsCandidateRefinement(contextualizedText)
+                && requestedCandidateNumber != null) {
+                refineReferencedCandidate(referenced.get(), requestedCandidateNumber);
+            }
+            return workflowReferenceFragment(
+                model,
+                referenced.get(),
+                requestedCandidateNumber
+            );
         }
         var interpretation = dashboardUseCase.interpretNaturalLanguage(
-            new DashboardUseCase.InterpretationCommand(text, idempotencyKey)
+            new DashboardUseCase.InterpretationCommand(contextualizedText, idempotencyKey)
         );
         if (interpretation.decision().confirmable()
             && "ANALYZE_JENKINS".equals(interpretation.decision().intent())) {
@@ -463,6 +489,52 @@ public class DashboardController {
         return "dashboard/fragments/interpretation";
     }
 
+    private String contextualizedText(String text, String conversationContext) {
+        if ("LATEST_FAILED_PULL_REQUEST".equals(conversationContext)
+            && referencesPriorMessage(text)) {
+            return "최근 실패 빌드 " + text;
+        }
+        if (conversationContext.startsWith("REFINEMENT_PRIORITY|")
+            && referencesPriority(text)) {
+            String[] contextParts = conversationContext.split("\\|", 3);
+            if (contextParts.length == 3) {
+                return contextParts[1] + " " + contextParts[2] + "번 " + text;
+            }
+        }
+        return text;
+    }
+
+    private boolean referencesPriority(String text) {
+        String normalized = text.toLowerCase(Locale.ROOT);
+        return normalized.contains("1번")
+            || normalized.contains("첫 번째")
+            || normalized.contains("첫번째")
+            || referencesPriorMessage(text);
+    }
+
+    private boolean referencesPriorMessage(String text) {
+        String normalized = text.toLowerCase(Locale.ROOT);
+        return normalized.contains("그거")
+            || normalized.contains("그것")
+            || normalized.contains("저거")
+            || normalized.contains("이거")
+            || normalized.contains("해당 건")
+            || normalized.contains("that");
+    }
+
+    @GetMapping("/ui/fragments/natural-language/interpretations/{interpretationId}")
+    public String interpretation(
+        @PathVariable @NotBlank String interpretationId,
+        Model model
+    ) {
+        model.addAttribute(
+            "interpretation",
+            dashboardUseCase.getNaturalLanguageInterpretation(interpretationId)
+        );
+        model.addAttribute("executionIdempotencyKey", UUID.randomUUID().toString());
+        return "dashboard/fragments/interpretation";
+    }
+
     private boolean requestsFailedPullRequestList(String text) {
         String normalized = text.toLowerCase(Locale.ROOT);
         boolean asksRecentFailures = normalized.contains("최근")
@@ -475,6 +547,54 @@ public class DashboardController {
                 || normalized.contains("목록")
                 || normalized.contains("알려")
                 || normalized.contains("보여"));
+    }
+
+    private boolean requestsRefinementPriorities(String text) {
+        String normalized = text.toLowerCase(Locale.ROOT);
+        return normalized.contains("정밀")
+            && (normalized.contains("우선")
+                || normalized.contains("필요")
+                || normalized.contains("순위"));
+    }
+
+    private boolean requestsMostUrgentWork(String text) {
+        String normalized = text.toLowerCase(Locale.ROOT);
+        return (normalized.contains("시급") || normalized.contains("가장 우선"))
+            && (normalized.contains("진행") || normalized.contains("처리"));
+    }
+
+    private boolean requestsCandidateRefinement(String text) {
+        String normalized = text.toLowerCase(Locale.ROOT);
+        return normalized.contains("정밀") && normalized.contains("분석");
+    }
+
+    private void refineReferencedCandidate(
+        DashboardView.WorkflowItem workflow,
+        int candidateNumber
+    ) {
+        if (candidateNumber < 1 || candidateNumber > workflow.candidateWorkflows().size()) {
+            return;
+        }
+        var analysis = workflow.storedAnalysis().analysis();
+        var candidate = workflow.candidateWorkflows().get(candidateNumber - 1).candidate();
+        dashboardUseCase.refineCandidate(new DashboardUseCase.RefinementCommand(
+            analysis.identity().analysisId(),
+            analysis.identity().version(),
+            candidate.candidateId()
+        ));
+    }
+
+    private String mostUrgentWork(Model model) {
+        return dashboardUseCase.getMostUrgentCandidate()
+            .map(priority -> workflowReferenceFragment(
+                model,
+                priority.workflow(),
+                priority.candidateNumber()
+            ))
+            .orElseGet(() -> {
+                model.addAttribute("priorityCandidates", List.of());
+                return "dashboard/fragments/chat-refinement-priorities";
+            });
     }
 
     private Optional<DashboardView.WorkflowItem> referencedWorkflow(String text) {

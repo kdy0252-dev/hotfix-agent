@@ -114,7 +114,7 @@ public class LocalGitPatchWorkspaceAdapter implements PatchWorkspacePort {
             validateChanges(workspace, changes);
             runRequired(worktree, addCommand(changes.files()));
             runRequired(worktree, List.of(
-                "git", "-c", "user.name=FMS Hotfix Agent",
+                "git", "-c", "user.name=Hotfix Agent",
                 "-c", "user.email=fms-hotfix-agent@localhost",
                 "commit", "-m", "fix(agent): " + safeSummary(proposal.summary())
             ));

@@ -318,7 +318,11 @@ public class IncidentDashboardModuleAdapter implements IncidentDashboardPort {
             view.title(),
             view.rootCause(),
             view.confidence(),
-            view.eligibility()
+            view.eligibility(),
+            view.refinement() == null ? null : new DashboardView.Refinement(
+                view.refinement().status(),
+                view.refinement().failureReason()
+            )
         );
     }
 

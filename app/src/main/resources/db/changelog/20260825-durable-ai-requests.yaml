@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260825-01-durable-ai-requests
+      author: dykim
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/20260825-durable-ai-requests.sql
+            splitStatements: true
+            stripComments: true

@@ -188,8 +188,12 @@ public interface IncidentDashboardGateway {
         String title,
         String rootCause,
         double confidence,
-        String eligibility
+        String eligibility,
+        Refinement refinement
     ) {
+    }
+
+    record Refinement(String status, String failureReason) {
     }
 
     record SelectionCommand(

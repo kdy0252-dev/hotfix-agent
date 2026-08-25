@@ -25,7 +25,7 @@ class IncidentDashboardAssemblerTest {
             List.of("loki:trace-1")
         );
 
-        var view = assembler.analysis(analysis(candidate));
+        var view = assembler.analysis(analysis(candidate), List.of());
 
         assertThat(view.candidates().getFirst().eligibility()).isEqualTo("ELIGIBLE");
     }
@@ -38,7 +38,7 @@ class IncidentDashboardAssemblerTest {
             List.of("loki:trace-1")
         );
 
-        var view = assembler.analysis(analysis(candidate));
+        var view = assembler.analysis(analysis(candidate), List.of());
 
         assertThat(view.candidates().getFirst().eligibility())
             .isEqualTo("INSUFFICIENT_EVIDENCE");

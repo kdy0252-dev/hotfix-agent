@@ -3,6 +3,7 @@ package com.example.myagent.dashboard.application.port.in;
 import com.example.myagent.dashboard.application.domain.model.view.DashboardView;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface DashboardUseCase {
     List<DashboardView.FailedPullRequest> getFailedPullRequests();
@@ -21,12 +22,20 @@ public interface DashboardUseCase {
 
     List<DashboardView.WorkflowItem> getWorkflowItems();
 
+    Optional<DashboardView.CandidatePriority> getMostUrgentCandidate();
+
+    List<DashboardView.CandidatePriority> getRefinementPriorities();
+
     DashboardView.Analysis getAnalysis(String analysisId);
 
     DashboardView.Analysis refineCandidate(RefinementCommand command);
 
     DashboardView.InterpretationPreview interpretNaturalLanguage(
         InterpretationCommand command
+    );
+
+    DashboardView.InterpretationPreview getNaturalLanguageInterpretation(
+        String interpretationId
     );
 
     DashboardView.ExecutionResult executeNaturalLanguage(ExecutionCommand command);

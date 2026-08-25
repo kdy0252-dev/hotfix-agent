@@ -8,7 +8,7 @@ base path는 `/api/v1`이며 JSON unknown field는 `400 Bad Request`로 거부�
 
 - 분석, 선택, 자연어 해석과 실행은 요청이 있을 때만 수행한다. background polling은 없다.
 - 분석·선택·자연어 해석·자연어 실행 `POST`는 `Idempotency-Key`가 필수다.
-- 분석과 선택은 `202 Accepted`, 자연어 해석 생성은 `201 Created`, 자연어 실행은 `202 Accepted`다.
+- 분석, 선택, 자연어 해석과 자연어 실행은 작업을 DB에 저장하고 `202 Accepted`로 반환한다.
 - 식별자는 현재 UUID 문자열이다. 클라이언트는 형식이나 생성 순서에 의존하면 안 된다.
 - 분석과 hotfix 조회는 도메인 record를 그대로 JSON으로 직렬화한다.
 
@@ -44,13 +44,13 @@ commit과 source branch를 사용한다. 원래 source branch에 직접 push하�
 | Method | Path | 성공 | 목적 | SRS |
 | --- | --- | --- | --- | --- |
 | `POST` | `/analyses/jenkins` | `202` | 선택한 실패 Jenkins build 분석 | `SRS-JEN-001~005`, `SRS-SRC-001~007` |
-| `POST` | `/analyses/observability` | `202` | 지정 환경·시간 범위의 EU app 관측 분석 | `SRS-OBS-001~011`, `SRS-SRC-001~007` |
+| `POST` | `/analyses/observability` | `202` | 지정 환경·시간 범위의 대상 서비스 관측 분석 | `SRS-OBS-001~011`, `SRS-SRC-001~007` |
 | `GET` | `/analyses/{analysisId}` | `200` | 분석 상태 조회 | `SRS-CAN-002~007`, `SRS-STA-001~005` |
 | `GET` | `/analyses/{analysisId}/candidates` | `200` | 후보 목록 조회 | `SRS-CAN-002~007` |
 | `POST` | `/analyses/{analysisId}/selections` | `202` | 선택한 후보의 hotfix 접수 | `SRS-SEL-001~006`, `SRS-GIT-001~007`, `SRS-VER-001~014` |
 | `GET` | `/hotfixes/{hotfixId}` | `200` | patch·검증·Draft PR 상태 조회 | `SRS-VER-001~014`, `SRS-PR-001~005` |
 | `POST` | `/hotfixes/{hotfixId}/ci-status-refresh` | `200` | Jenkins PR build 상태 1회 조회 | `SRS-PR-006~007` |
-| `POST` | `/natural-language/interpretations` | `201` | 자연어를 typed command로 해석 | `SRS-NL-001~006`, `SRS-NL-013` |
+| `POST` | `/natural-language/interpretations` | `202` | 자연어 typed command 해석 작업 접수 | `SRS-NL-001~006`, `SRS-NL-013`, `SRS-NL-015` |
 | `GET` | `/natural-language/interpretations/{id}` | `200` | 해석 조회 | `SRS-NL-003~006`, `SRS-NL-008` |
 | `POST` | `/natural-language/interpretations/{id}/executions` | `202` | 확인된 command를 기존 use case로 실행 | `SRS-NL-007~014` |
 
@@ -235,11 +235,12 @@ Content-Type: application/json
 ```
 
 ```json
-{"text":"FMS-EU PR-1292의 1번 실패 빌드를 분석해줘"}
+{"text":"최근 실패한 PR의 빌드를 분석해줘"}
 ```
 
-성공은 `201 Created`이고 `Location` header를 포함한다. 응답은
-`CommandInterpretation(metadata, decision)` 구조다.
+성공은 `202 Accepted`이고 `Location` header를 포함한다. 최초 응답은 `ANALYZING` 상태이며,
+`GET /api/v1/natural-language/interpretations/{interpretationId}`로 완료 상태를 조회한다. 응답은
+`CommandInterpretation(metadata, decision)` 구조다. 실행 중인 해석은 서버 재기동 후 DB에서 복구된다.
 
 ```json
 {
@@ -304,8 +305,7 @@ Content-Type: application/json
 | Status | 조건 |
 | --- | --- |
 | `200` | 조회, CI 상태 1회 갱신 |
-| `201` | 자연어 interpretation 생성 |
-| `202` | 분석·selection·자연어 실행 접수 |
+| `202` | 분석·selection·자연어 해석·자연어 실행 접수 |
 | `400` | validation, unknown field, idempotency key 누락 |
 | `404` | analysis, candidate, hotfix, branch 또는 PR 없음 |
 | `409` | idempotency 충돌, stale source/version/hash, 잘못된 상태 전이 |
@@ -318,6 +318,4 @@ Content-Type: application/json
 - controller/service contract, idempotency, safety gate와 adapter test가 `./gradlew check`에 포함된다.
 - 네 Embabel agent의 mock 평가가 `./gradlew :app:aiMockTest`에 포함된다.
 - 실제 credential smoke와 실 PR 생성은 기본 test에서 분리된다.
-- 2026-08-21에 FMS PR #1292를 입력으로 전체 parity와 Newman 20/20 성공 후 reviewer 없는 Draft PR
-  #1295를 생성했다.
-- PR #1295의 Jenkins build 시작까지 확인했으며 최종 성공 여부는 이 문서에서 확정하지 않는다.
+- 외부 credential을 사용하는 실제 PR 생성 검증은 기본 test와 분리하고 Draft PR만 허용한다.

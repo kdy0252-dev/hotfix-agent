@@ -7,7 +7,7 @@
 | --- | --- | --- |
 | `SRS-API-001~006` | 구조화 controller, request hash, 비동기 executor, scheduler 없음 | `*ControllerContractTest`, `IncidentAnalysisServiceTest` |
 | `SRS-JEN-001~005` | 실패 build metadata preflight, bounded console/test 수집 | `JenkinsRestAdapterTest`, `IncidentControllerContractTest` |
-| `SRS-OBS-001~011` | 고정 EU app query, Prometheus/Loki/Tempo/alert 경계 | `GrafanaObservabilityAdapterTest`, `GrafanaEvidenceBoundaryTest` |
+| `SRS-OBS-001~011` | 환경변수로 제한된 대상 서비스 query, Prometheus/Loki/Tempo/alert 경계 | `GrafanaObservabilityAdapterTest`, `GrafanaEvidenceBoundaryTest` |
 | `SRS-SRC-001~007` | branch/open PR commit 고정, selection/publish 전 freshness 검사 | Bitbucket source adapter tests |
 | `SRS-CAN-001~007` | triage → reasoning typed artifact, 실제 evidence provenance 고정 | `IncidentAnalysisAgentAiMockTest`, 상태 persistence test |
 | `SRS-SEL-001~006` | version/TTL/eligibility/evidence/idempotency gate | `HotfixSelectionServiceTest`, controller contract test |

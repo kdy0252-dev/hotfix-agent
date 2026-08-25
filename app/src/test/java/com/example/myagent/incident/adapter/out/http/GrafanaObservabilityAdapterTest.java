@@ -73,6 +73,7 @@ class GrafanaObservabilityAdapterTest {
             new ObservabilityScopeProperties(
                 "eu",
                 "app",
+                "Booking API",
                 "fms-eu-%s",
                 "fms-eu-%s-app"
             ),
@@ -214,14 +215,14 @@ class GrafanaObservabilityAdapterTest {
         )).get();
 
         assertThat(result).anySatisfy(signal -> {
-            assertThat(signal.title()).isEqualTo("EU 앱 운영 로그 에러");
+            assertThat(signal.title()).isEqualTo("Booking API 운영 로그 에러");
             assertThat(signal.occurredAt()).isEqualTo("2026-08-11T01:00:47Z");
             assertThat(signal.reference().traceId())
                 .isEqualTo("96968fb48021bc2c093229d221efdf00");
             assertThat(signal.reference().linkLabel()).isEqualTo("Loki");
             assertThat(signal.reference().technicalDetail())
                 .contains(
-                    "발생 시각 · 2026-08-11T01:00:47Z",
+                    "발생 시각 · 2026-08-11 10:00:47 KST",
                     "레벨 · ERROR",
                     "메시지 · request failed",
                     "스택 트레이스",
@@ -265,7 +266,7 @@ class GrafanaObservabilityAdapterTest {
             "PROD"
         )).get();
 
-        assertThat(result).filteredOn(signal -> "EU 앱 운영 로그 에러".equals(signal.title()))
+        assertThat(result).filteredOn(signal -> "Booking API 운영 로그 에러".equals(signal.title()))
             .allSatisfy(signal -> assertThat(signal.reference().traceId()).isNull());
     }
 
@@ -280,7 +281,7 @@ class GrafanaObservabilityAdapterTest {
         )).get();
 
         assertThat(result.get(0).type()).isEqualTo(ObservabilityDashboardPort.Type.STACK_TRACE);
-        assertThat(result.get(0).title()).isEqualTo("EU 앱 HTTP 요청 경고");
+        assertThat(result.get(0).title()).isEqualTo("Booking API HTTP 요청 경고");
     }
 
     @Test
@@ -341,7 +342,7 @@ class GrafanaObservabilityAdapterTest {
             Long.toString(endAt.toInstant().toEpochMilli())
         ));
         assertThat(result.get())
-            .filteredOn(signal -> "EU 앱 운영 로그 에러".equals(signal.title()))
+            .filteredOn(signal -> "Booking API 운영 로그 에러".equals(signal.title()))
             .hasSize(1);
     }
 

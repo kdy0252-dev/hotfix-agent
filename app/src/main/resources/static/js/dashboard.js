@@ -26,6 +26,65 @@ document.addEventListener("DOMContentLoaded", () => {
     const promotedAnalyses = new Set();
     let pendingConfirmation;
     let selectedWorkflowReference = "";
+    const activeInterpretationStorageKey = "fms-hotfix-active-interpretation";
+    const conversationContextStorageKey = "hotfix-agent-conversation-context";
+
+    const setConversationContext = (value) => {
+        const context = value || "";
+        document.querySelectorAll("[data-command-form] input[name='conversationContext']")
+            .forEach(input => {
+                input.value = context;
+            });
+        if (context) {
+            window.localStorage.setItem(conversationContextStorageKey, context);
+        } else {
+            window.localStorage.removeItem(conversationContextStorageKey);
+        }
+    };
+
+    const rememberConversationContext = (root) => {
+        const contextualResult = root?.matches?.("[data-chat-context]")
+            ? root : root?.querySelector?.("[data-chat-context]");
+        if (contextualResult?.dataset.chatContext) {
+            setConversationContext(contextualResult.dataset.chatContext);
+        }
+    };
+
+    const rememberInterpretation = (root) => {
+        const interpretation = root?.matches?.("[data-interpretation-id]")
+            ? root : root?.querySelector?.("[data-interpretation-id]");
+        if (!interpretation) {
+            return;
+        }
+        if (interpretation.dataset.interpretationActive === "true") {
+            window.localStorage.setItem(
+                activeInterpretationStorageKey,
+                interpretation.dataset.interpretationId
+            );
+            return;
+        }
+        window.localStorage.removeItem(activeInterpretationStorageKey);
+    };
+
+    const restoreActiveInterpretation = async () => {
+        const interpretationId = window.localStorage.getItem(activeInterpretationStorageKey);
+        const target = document.querySelector("#command-result");
+        if (!interpretationId || !target) {
+            return;
+        }
+        const response = await fetch(
+            `/ui/fragments/natural-language/interpretations/${encodeURIComponent(interpretationId)}`,
+            {headers: {"HX-Request": "true"}}
+        );
+        if (!response.ok) {
+            window.localStorage.removeItem(activeInterpretationStorageKey);
+            return;
+        }
+        target.innerHTML = await response.text();
+        window.htmx?.process(target);
+        rememberInterpretation(target);
+        setChatOpen(true);
+    };
 
     const configurePagination = (container) => {
         if (!container || container.dataset.paginationReady === "true") {
@@ -208,6 +267,10 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         form.dataset.commandConfigured = "true";
+        const context = form.querySelector("input[name='conversationContext']");
+        if (context) {
+            context.value = window.localStorage.getItem(conversationContextStorageKey) || "";
+        }
         form.querySelector("textarea[name='text']")?.addEventListener("keydown", (event) => {
             if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
                 event.preventDefault();
@@ -262,6 +325,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     document.querySelectorAll("[data-command-form]").forEach(configureCommandForm);
+    setConversationContext(window.localStorage.getItem(conversationContextStorageKey));
 
     document.body.addEventListener("htmx:confirm", (event) => {
         if (!event.detail.question || !confirmationModal) {
@@ -486,6 +550,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     configurePaginatedLists(document);
     configureWorkflowFilter(document.querySelector("#workflow-list"));
+    restoreActiveInterpretation().catch(() => {
+        window.localStorage.removeItem(activeInterpretationStorageKey);
+    });
     promoteCompletedAnalyses(document);
     synchronizeObservabilityAnalysis(document);
 
@@ -501,6 +568,8 @@ document.addEventListener("DOMContentLoaded", () => {
         promoteCompletedAnalyses(currentTarget);
         synchronizeObservabilityAnalysis(swapped);
         synchronizeObservabilityAnalysis(currentTarget);
+        rememberInterpretation(swapped);
+        rememberConversationContext(swapped);
         const refreshRequests = [
             ...(swapped?.matches?.("[data-refresh-workflow]") ? [swapped] : []),
             ...(swapped?.querySelectorAll?.("[data-refresh-workflow]") || [])
@@ -520,6 +589,15 @@ document.addEventListener("DOMContentLoaded", () => {
     document.body.addEventListener("click", (event) => {
         const close = event.target.closest("[data-dismiss-analysis-action]");
         close?.closest(".observability-analysis-action")?.replaceChildren();
+        const chatFill = event.target.closest("[data-chat-fill]");
+        if (chatFill) {
+            const form = document.querySelector("[data-command-form]");
+            const textarea = form?.querySelector("textarea[name='text']");
+            if (form && textarea) {
+                textarea.value = chatFill.dataset.chatFill;
+                form.requestSubmit();
+            }
+        }
     });
 
     document.body.addEventListener("htmx:beforeRequest", (event) => {

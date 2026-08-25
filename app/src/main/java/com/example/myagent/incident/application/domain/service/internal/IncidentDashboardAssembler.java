@@ -3,6 +3,7 @@ package com.example.myagent.incident.application.domain.service.internal;
 import com.example.myagent.global.annotation.InternalService;
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisSession;
 import com.example.myagent.incident.application.domain.model.analysis.BugCandidate;
+import com.example.myagent.incident.application.domain.model.analysis.CandidateRefinementTask;
 import com.example.myagent.incident.application.domain.model.analysis.SourceSpec;
 import com.example.myagent.incident.application.domain.model.dashboard.IncidentDashboardView;
 import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource;
@@ -28,7 +29,10 @@ public class IncidentDashboardAssembler {
             .toList();
     }
 
-    public IncidentDashboardView.Analysis analysis(AnalysisSession session) {
+    public IncidentDashboardView.Analysis analysis(
+        AnalysisSession session,
+        List<CandidateRefinementTask> refinements
+    ) {
         var candidates = session.result().candidates().stream()
             .map(candidate -> new IncidentDashboardView.Candidate(
                 candidate.identity().candidateId(),
@@ -37,7 +41,8 @@ public class IncidentDashboardAssembler {
                 candidate.identity().confidence(),
                 candidate.automaticFixReady()
                     ? BugCandidate.Eligibility.ELIGIBLE.name()
-                    : restrictedEligibility(candidate)
+                    : restrictedEligibility(candidate),
+                refinement(candidate.identity().candidateId(), refinements)
             ))
             .toList();
         return new IncidentDashboardView.Analysis(
@@ -51,6 +56,20 @@ public class IncidentDashboardAssembler {
         );
     }
 
+    private IncidentDashboardView.Refinement refinement(
+        String candidateId,
+        List<CandidateRefinementTask> refinements
+    ) {
+        return refinements.stream()
+            .filter(task -> task.candidateId().equals(candidateId))
+            .findFirst()
+            .map(task -> new IncidentDashboardView.Refinement(
+                task.status().name(),
+                task.failureReason()
+            ))
+            .orElse(null);
+    }
+
     private String restrictedEligibility(BugCandidate candidate) {
         return candidate.identity().eligibility() == BugCandidate.Eligibility.HUMAN_ONLY
             ? BugCandidate.Eligibility.HUMAN_ONLY.name()
@@ -58,7 +77,8 @@ public class IncidentDashboardAssembler {
     }
 
     public IncidentDashboardView.StoredAnalysis storedAnalysis(
-        IncidentStatePort.AnalysisEnvelope envelope
+        IncidentStatePort.AnalysisEnvelope envelope,
+        List<CandidateRefinementTask> refinements
     ) {
         var session = envelope.session();
         var source = session.snapshot().source();
@@ -66,7 +86,7 @@ public class IncidentDashboardAssembler {
         String reference = source.type() == SourceSpec.Type.PULL_REQUEST
             ? "PR-" + source.pullRequestId() : source.branchName();
         return new IncidentDashboardView.StoredAnalysis(
-            analysis(session),
+            analysis(session, refinements),
             new IncidentDashboardView.AnalysisSource(
                 source.type().name(),
                 reference,

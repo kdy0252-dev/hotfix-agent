@@ -26,7 +26,7 @@
             <p class="mono muted" th:text="|${item.branch.commit.substring(0, 12)} · build #${item.build.number}|">
                 commit · build
             </p>
-            <p class="timestamp" th:text="${item.build.timestamp}">build time</p>
+            <p class="timestamp" th:text="${item.build.timestampKstLabel}">build time KST</p>
         </div>
         <div class="card-actions">
             <a th:href="${item.pullRequest.url}" target="_blank" rel="noopener noreferrer">Bitbucket ↗</a>

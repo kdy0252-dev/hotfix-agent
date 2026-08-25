@@ -3,10 +3,12 @@ package com.example.myagent.command.adapter.out.persistence;
 import com.example.myagent.command.adapter.out.persistence.entity.CommandInterpretationEntity;
 import com.example.myagent.command.adapter.out.persistence.repository.CommandInterpretationJpaRepository;
 import com.example.myagent.command.application.domain.model.interpretation.CommandInterpretation;
+import com.example.myagent.command.application.domain.model.interpretation.InterpretationStatus;
 import com.example.myagent.command.application.port.out.CommandFailure;
 import com.example.myagent.command.application.port.out.CommandInterpretationStatePort;
 import io.vavr.control.Either;
 import io.vavr.control.Try;
+import java.util.List;
 import java.util.Optional;
 import org.jmolecules.architecture.hexagonal.Adapter;
 import org.springframework.stereotype.Component;
@@ -51,6 +53,17 @@ public class JpaCommandInterpretationPersistenceAdapter implements CommandInterp
             entity.markExecuted();
             return repository.save(entity).toDomain().interpretation();
         }).toEither().mapLeft(this::failure);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Either<CommandFailure, List<StateEntry>> findIncomplete() {
+        return Try.of(() -> repository.findAllByStatusInOrderByCreatedAtAsc(List.of(
+                InterpretationStatus.INTERPRETATION_REQUESTED,
+                InterpretationStatus.INTERPRETING
+            )).stream()
+            .map(CommandInterpretationEntity::toDomain)
+            .toList()).toEither().mapLeft(this::failure);
     }
 
     private CommandFailure failure(Throwable throwable) {

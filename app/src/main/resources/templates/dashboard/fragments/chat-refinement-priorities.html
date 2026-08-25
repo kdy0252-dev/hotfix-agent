@@ -1,0 +1,27 @@
+<div class="chat-list-response" xmlns:th="http://www.thymeleaf.org"
+     th:attr="data-chat-context=${#lists.isEmpty(priorityCandidates) ? null : 'REFINEMENT_PRIORITY|' + priorityCandidates[0].workflow.storedAnalysis.analysis.identity.analysisId + '|' + priorityCandidates[0].candidateNumber}">
+    <div class="chat-message assistant" th:if="${!#lists.isEmpty(priorityCandidates)}">
+        <strong>정밀 분석이 필요한 후보 우선순위입니다.</strong>
+        <span>증거가 부족하거나 신뢰도가 낮은 최근 후보부터 최대 5건을 정리했습니다.</span>
+    </div>
+    <div class="chat-message assistant" th:if="${#lists.isEmpty(priorityCandidates)}">
+        현재 추가 정밀 분석이 필요한 미진행 후보가 없습니다.
+    </div>
+    <article th:each="priority, priorityStat : ${priorityCandidates}"
+             class="chat-candidate">
+        <div>
+            <span class="confidence" th:text="|${priorityStat.count}순위|">1순위</span>
+            <strong th:text="${priority.candidateWorkflow.candidate.title}">candidate</strong>
+        </div>
+        <p th:text="${priority.reason}">priority reason</p>
+        <small th:text="|${priority.workflow.storedAnalysis.source.reference} · 후보 ${priority.candidateNumber}번 · 신뢰도 ${priority.candidateWorkflow.candidate.confidencePercent}%|">
+            source
+        </small>
+        <div class="chat-result-links">
+            <button type="button" class="small-action"
+                    th:attr="data-chat-fill=|${priority.workflow.storedAnalysis.analysis.identity.analysisId.substring(0, 8)} ${priority.candidateNumber}번 정밀 분석해줘|">
+                이 후보 정밀 분석 요청
+            </button>
+        </div>
+    </article>
+</div>

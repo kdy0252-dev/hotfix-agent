@@ -80,7 +80,7 @@ Parity 4단계는 `jenkins-gradle-verification`, `jenkins-coverage-report`, `jen
 
 ## 5. Natural-language 흐름
 
-자연어 해석은 `command` slice 안에서 외부 조회 없이 preview만 저장한다. `201 Created`로 반환된
+자연어 해석은 `command` slice 안에서 외부 조회 없이 DB 작업으로 접수한다. `202 Accepted`로 반환된
 interpretation의 version과 command hash를 사용자가 실행 API로 다시 보내야 기존 typed gateway가
 호출된다. 원문이나 LLM output은 외부 adapter 인자가 되지 않는다.
 

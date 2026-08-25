@@ -1,7 +1,9 @@
 <div id="observability-list" class="item-list" data-paginated-list
      xmlns:th="http://www.thymeleaf.org">
     <div class="result-meta">
-        <span th:text="|${environment} · EU APP · KST|">PROD · EU APP · KST</span>
+        <span th:text="|${environment} · ${observabilityServiceName} · KST|">
+            PROD · SERVICE · KST
+        </span>
         <strong data-filter-count th:text="|${#lists.size(signals)} signals|">0 signals</strong>
     </div>
     <div th:if="${!#lists.isEmpty(signals)}" class="pagination-toolbar">
@@ -91,7 +93,9 @@
                     th:text="${signal.reference.technicalDetail}">detail</dd></div>
                 <div><dt>조회 소스</dt><dd th:text="${signal.reference.linkLabel}">Loki</dd></div>
                 <div><dt>발생 시각</dt><dd th:text="${signal.occurredAtKstLabel}">time</dd></div>
-                <div><dt>환경</dt><dd th:text="|${environment} · EU APP · KST|">PROD · EU APP · KST</dd></div>
+                <div><dt>환경</dt><dd th:text="|${environment} · ${observabilityServiceName} · KST|">
+                    PROD · SERVICE · KST
+                </dd></div>
             </dl>
             <a class="primary modal-link" th:href="${signal.reference.url}" target="_blank"
                rel="noopener noreferrer"

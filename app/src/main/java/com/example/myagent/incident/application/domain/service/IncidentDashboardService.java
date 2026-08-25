@@ -1,10 +1,12 @@
 package com.example.myagent.incident.application.domain.service;
 
+import com.example.myagent.incident.application.domain.model.analysis.CandidateRefinementTask;
 import com.example.myagent.incident.application.domain.model.dashboard.IncidentDashboardView;
 import com.example.myagent.incident.application.domain.service.internal.FailedPullRequestResolver;
 import com.example.myagent.incident.application.domain.service.internal.IncidentDashboardAssembler;
 import com.example.myagent.incident.application.port.in.IncidentUseCaseException;
 import com.example.myagent.incident.application.port.in.QueryIncidentDashboardUseCase;
+import com.example.myagent.incident.application.port.out.CandidateRefinementTaskPort;
 import com.example.myagent.incident.application.port.out.IncidentFailure;
 import com.example.myagent.incident.application.port.out.IncidentStatePort;
 import com.example.myagent.incident.application.port.out.JenkinsDashboardPort;
@@ -17,6 +19,7 @@ public class IncidentDashboardService implements QueryIncidentDashboardUseCase {
     private final JenkinsDashboardPort jenkinsDashboardPort;
     private final ObservabilityDashboardPort observabilityDashboardPort;
     private final IncidentStatePort statePort;
+    private final CandidateRefinementTaskPort refinementTaskPort;
     private final FailedPullRequestResolver pullRequestResolver;
     private final IncidentDashboardAssembler assembler;
 
@@ -24,12 +27,14 @@ public class IncidentDashboardService implements QueryIncidentDashboardUseCase {
         JenkinsDashboardPort jenkinsDashboardPort,
         ObservabilityDashboardPort observabilityDashboardPort,
         IncidentStatePort statePort,
+        CandidateRefinementTaskPort refinementTaskPort,
         FailedPullRequestResolver pullRequestResolver,
         IncidentDashboardAssembler assembler
     ) {
         this.jenkinsDashboardPort = jenkinsDashboardPort;
         this.observabilityDashboardPort = observabilityDashboardPort;
         this.statePort = statePort;
+        this.refinementTaskPort = refinementTaskPort;
         this.pullRequestResolver = pullRequestResolver;
         this.assembler = assembler;
     }
@@ -66,7 +71,10 @@ public class IncidentDashboardService implements QueryIncidentDashboardUseCase {
         return statePort.findRecentAnalyses()
             .getOrElseThrow(this::failure)
             .stream()
-            .map(assembler::storedAnalysis)
+            .map(envelope -> assembler.storedAnalysis(
+                envelope,
+                refinements(envelope.session().identity().analysisId())
+            ))
             .toList();
     }
 
@@ -78,7 +86,11 @@ public class IncidentDashboardService implements QueryIncidentDashboardUseCase {
                 "ANALYSIS_NOT_FOUND",
                 "분석 결과를 찾을 수 없습니다."
             ));
-        return assembler.analysis(envelope.session());
+        return assembler.analysis(envelope.session(), refinements(analysisId));
+    }
+
+    private List<CandidateRefinementTask> refinements(String analysisId) {
+        return refinementTaskPort.findByAnalysisId(analysisId).getOrElseThrow(this::failure);
     }
 
     private IncidentUseCaseException failure(IncidentFailure incidentFailure) {

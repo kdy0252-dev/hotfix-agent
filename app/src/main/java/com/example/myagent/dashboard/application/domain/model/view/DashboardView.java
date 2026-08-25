@@ -38,6 +38,9 @@ public final class DashboardView {
         Instant timestamp,
         String url
     ) {
+        public String timestampKstLabel() {
+            return KOREA_DATE_TIME.format(timestamp.atZone(KOREA_ZONE));
+        }
     }
 
     public record ObservabilitySignal(
@@ -296,6 +299,11 @@ public final class DashboardView {
         public boolean active() {
             return !storedAnalysis.analysis().completed()
                 || candidateWorkflows.stream()
+                    .map(CandidateWorkflow::candidate)
+                    .map(Candidate::refinement)
+                    .filter(Objects::nonNull)
+                    .anyMatch(Refinement::active)
+                || candidateWorkflows.stream()
                     .map(CandidateWorkflow::hotfix)
                     .filter(Objects::nonNull)
                     .map(HotfixProgress::progress)
@@ -310,12 +318,21 @@ public final class DashboardView {
     public record CandidateWorkflow(Candidate candidate, HotfixProgress hotfix) {
     }
 
+    public record CandidatePriority(
+        WorkflowItem workflow,
+        CandidateWorkflow candidateWorkflow,
+        int candidateNumber,
+        String reason
+    ) {
+    }
+
     public record Candidate(
         String candidateId,
         String title,
         String rootCause,
         double confidence,
-        String eligibility
+        String eligibility,
+        Refinement refinement
     ) {
         public boolean selectable() {
             return "ELIGIBLE".equals(eligibility);
@@ -332,6 +349,12 @@ public final class DashboardView {
 
         public int confidencePercent() {
             return (int) Math.round(confidence * 100);
+        }
+    }
+
+    public record Refinement(String status, String failureReason) {
+        public boolean active() {
+            return "REQUESTED".equals(status) || "RUNNING".equals(status);
         }
     }
 
@@ -356,6 +379,11 @@ public final class DashboardView {
 
         public boolean confirmable() {
             return "READY_FOR_CONFIRMATION".equals(status) && commandHash != null;
+        }
+
+        public boolean active() {
+            return "INTERPRETATION_REQUESTED".equals(status)
+                || "INTERPRETING".equals(status);
         }
     }
 

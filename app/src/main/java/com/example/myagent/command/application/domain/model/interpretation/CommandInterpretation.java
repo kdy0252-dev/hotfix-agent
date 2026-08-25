@@ -40,6 +40,10 @@ public record CommandInterpretation(Metadata metadata, Decision decision) {
             clarificationQuestions = clarificationQuestions == null
                 ? List.of() : List.copyOf(clarificationQuestions);
         }
+
+        public static Feedback empty() {
+            return new Feedback(List.of(), List.of(), null, null);
+        }
     }
 
     public record PolicyPreview(

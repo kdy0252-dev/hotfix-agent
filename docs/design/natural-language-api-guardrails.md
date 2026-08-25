@@ -52,7 +52,7 @@ candidate ID와 analysis version이 없으므로 `NEEDS_CLARIFICATION`이다.
 
 ### 4.2 CommandInterpretation
 
-응답은 `metadata`와 `decision`으로 중첩된다. `POST` 생성 성공 상태는 `201 Created`다.
+응답은 `metadata`와 `decision`으로 중첩된다. `POST` 접수 성공 상태는 `202 Accepted`다.
 
 | 경로 | Type | 설명 |
 | --- | --- | --- |

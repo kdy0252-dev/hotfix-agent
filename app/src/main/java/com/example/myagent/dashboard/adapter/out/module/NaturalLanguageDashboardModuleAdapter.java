@@ -19,6 +19,14 @@ public class NaturalLanguageDashboardModuleAdapter implements NaturalLanguageDas
     }
 
     @Override
+    public Either<DashboardFailure, DashboardView.InterpretationPreview> interpretation(
+        String interpretationId
+    ) {
+        return Try.of(() -> preview(gateway.interpretation(interpretationId)))
+            .toEither().mapLeft(this::failure);
+    }
+
+    @Override
     public Either<DashboardFailure, DashboardView.InterpretationPreview> interpret(
         InterpretationCommand command
     ) {

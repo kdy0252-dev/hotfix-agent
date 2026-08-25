@@ -292,7 +292,11 @@ public class IncidentDashboardModuleApiService implements IncidentDashboardGatew
             view.title(),
             view.rootCause(),
             view.confidence(),
-            view.eligibility()
+            view.eligibility(),
+            view.refinement() == null ? null : new Refinement(
+                view.refinement().status(),
+                view.refinement().failureReason()
+            )
         );
     }
 

@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record ObservabilityScopeProperties(
     String region,
     String application,
+    String displayName,
     String namespaceTemplate,
     String serviceNameTemplate
 ) {

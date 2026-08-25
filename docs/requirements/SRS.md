@@ -283,10 +283,11 @@ POST /api/v1/analyses/{analysisId}/selections
 | SRS-NL-008 | interpretation은 10분 후 만료되어야 하며 만료, version/hash mismatch 또는 이미 대체된 해석은 `409`로 거부해야 한다. | clock/concurrency test |
 | SRS-NL-009 | 실행 service는 LLM output이나 원문 text가 아니라 검증된 typed command만 기존 구조화 application use case에 전달해야 한다. | architecture/argument capture test |
 | SRS-NL-010 | 자연어 `SELECT_CANDIDATE`는 analysis ID, candidate ID와 analysis version이 모두 명시된 경우에만 실행 가능해야 한다. | omitted identifier test |
-| SRS-NL-011 | 자연어 observability 요청은 start/end/environment/source를 모두 요구하고 service와 query scope는 기존 `EU_APP` 정책으로 고정해야 한다. | normalization test |
+| SRS-NL-011 | 자연어 observability 요청은 start/end/environment/source를 모두 요구하고 service와 query scope는 환경변수로 설정된 대상 서비스 정책으로 고정해야 한다. | normalization test |
 | SRS-NL-012 | 자연어로 시작한 실행은 `SRS-SRC`, `SRS-SEL`, `SRS-GIT`, `SRS-VER`, `SRS-PR` gate를 우회하거나 완화하지 않아야 한다. | parity workflow test |
 | SRS-NL-013 | 자연어 원문은 application log, PR과 LLM observability에 기록하지 않고 redacted preview와 SHA-256만 상태에 저장해야 한다. | leakage test |
 | SRS-NL-014 | 동일 interpretation execution idempotency key는 같은 delegated resource를 반환하고 중복 실행하지 않아야 한다. | replay test |
+| SRS-NL-015 | 자연어 해석은 DB에 작업 상태를 저장하고 HTTP 연결 종료나 서버 재기동 후에도 복구되어야 한다. | persistence/recovery test |
 
 ### 5.12 운영 UI
 
@@ -295,7 +296,7 @@ POST /api/v1/analyses/{analysisId}/selections
 | SRS-UI-001 | `GET /`는 JavaScript로 화면 전체를 조립하지 않는 SSR shell을 반환하고 기존 `GET /ui`는 `/`로 redirect해야 한다. | controller 및 browser test |
 | SRS-UI-002 | 실패 PR fragment는 Jenkins의 마지막 build가 `FAILURE`인 `PR-*` job과 대응하는 open Bitbucket PR의 branch·commit·링크만 표시해야 한다. | Jenkins/Bitbucket adapter test |
 | SRS-UI-003 | 실패 PR 목록은 화면 진입 1회와 사용자의 명시적 새로고침에서만 외부 시스템을 조회해야 한다. | template trigger 검증 |
-| SRS-UI-004 | 관측 fragment는 사용자가 입력한 시작·종료 시각과 `DEV`, `QA`, `PROD` 환경을 요구하고 EU app 범위를 서버에서 고정해야 한다. | controller/adapter test |
+| SRS-UI-004 | 관측 fragment는 사용자가 입력한 시작·종료 시각과 `DEV`, `QA`, `PROD` 환경을 요구하고 환경변수로 설정된 대상 서비스 범위를 서버에서 고정해야 한다. | controller/adapter test |
 | SRS-UI-005 | 관측 목록은 활성 알람과 오류 Trace를 구분하고 각 Grafana 상세 링크를 제공해야 한다. | Grafana adapter 및 template test |
 | SRS-UI-006 | 자연어 UI는 해석 미리보기와 version/hash 확인 실행을 분리하고 기존 자연어 use case만 호출해야 한다. | controller/module adapter test |
 | SRS-UI-007 | Draft PR 버튼은 완료된 분석의 `ELIGIBLE` 후보에만 노출되고 analysis version과 candidate ID를 기존 selection use case에 전달해야 한다. | controller/template test |
@@ -306,6 +307,9 @@ POST /api/v1/analyses/{analysisId}/selections
 | SRS-UI-012 | UI는 로컬 작업 취소·삭제, 실패 작업의 전체 guardrail 재시작, 명시적 CI 갱신과 Bitbucket/Jenkins 링크를 제공하고 로컬 삭제로 외부 기록을 삭제하지 않아야 한다. | controller, management service 및 workflow cancellation test |
 | SRS-UI-013 | UI는 실행 중인 세부 단계와 설명, 실패 단계·코드·복구 안내, 각 검증의 종료 코드와 redaction된 출력 요약을 DB에서 복원해 표시해야 한다. | assembler, persistence mapping 및 SSR fragment 검증 |
 | SRS-UI-014 | branch가 생성된 실패 hotfix는 기존 `agent/hotfix/*` branch를 사람 검토용으로 게시하고 Bitbucket 링크와 로컬 수정 절차를 표시해야 한다. | workspace adapter, controller 및 template test |
+| SRS-UI-015 | 대화형 UI는 직전 실패 PR 또는 정밀분석 우선순위 결과의 참조를 유지하여 후속 대명사·순번 요청을 같은 대상으로 해석해야 한다. | controller conversation test |
+| SRS-UI-016 | 대화형 UI는 최근 미진행 후보의 시급 작업과 정밀분석 필요 후보를 우선순위로 안내하되 후보 선택 안전 gate를 우회하지 않아야 한다. | priority resolver/controller test |
+| SRS-UI-017 | 사용자에게 표시되는 build, 관측 신호와 작업 시각은 KST로 표현해야 한다. | view/template test |
 | SRS-UI-015 | 사람이 같은 branch에 push한 commit의 재검증은 기준 commit 계보와 변경 정책을 다시 확인하고 집중 테스트, AI review, Jenkins parity를 모두 통과한 경우에만 Draft PR을 게시해야 한다. | guarded workflow 및 local Git integration test |
 | SRS-UI-016 | AI 분석 요청은 기존 workflow 목록을 비우지 않고 해당 PR 버튼에서 진행 상태를 표시하며, 완료 시 해당 analysis 카드 하나만 목록 맨 위에 갱신해야 한다. | controller, HTMX fragment 및 JavaScript behavior test |
 | SRS-UI-017 | 완료된 동일 분석 요청은 새 분석을 암묵적으로 만들지 않고 요청 버튼을 `중복 요청 재분석`으로 전환하여 명시적인 강제 재분석만 허용해야 한다. | controller 및 action fragment test |

@@ -68,7 +68,7 @@ class NaturalLanguageCommandControllerContractTest {
                 .header("Idempotency-Key", "nl-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"text\":\"main 181 빌드를 분석해줘\"}"))
-            .andExpect(status().isCreated())
+            .andExpect(status().isAccepted())
             .andExpect(header().string(
                 "Location",
                 "/api/v1/natural-language/interpretations/interpretation-1"

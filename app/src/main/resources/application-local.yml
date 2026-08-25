@@ -41,10 +41,11 @@ agent:
     state-path: ${AGENT_STATE_PATH:.agent/runtime}
   observability:
     scope:
-      region: eu
-      application: app
-      namespace-template: fms-eu-%s
-      service-name-template: fms-eu-%s-app
+      region: ${OBSERVABILITY_REGION:eu}
+      application: ${OBSERVABILITY_APPLICATION:app}
+      display-name: ${OBSERVABILITY_SERVICE_DISPLAY_NAME:TARGET SERVICE}
+      namespace-template: ${OBSERVABILITY_NAMESPACE_TEMPLATE:fms-eu-%s}
+      service-name-template: ${OBSERVABILITY_SERVICE_NAME_TEMPLATE:fms-eu-%s-app}
   verification:
     parity:
       approved-profiles:

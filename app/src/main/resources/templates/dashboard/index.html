@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FMS Hotfix Control</title>
+    <title>Hotfix Agent</title>
     <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
     <link rel="stylesheet" th:href="@{/webjars/flatpickr/4.6.13/dist/flatpickr.min.css}">
     <link rel="stylesheet" th:href="@{/css/dashboard.css}">
@@ -15,7 +15,7 @@
 <body>
 <header class="topbar">
     <div>
-        <p class="eyebrow">AUTOCRYPT · FMS EU</p>
+        <p class="eyebrow">AGENTIC INCIDENT RESPONSE</p>
         <h1>Hotfix Control</h1>
     </div>
     <div class="integration-statuses" aria-label="외부 시스템 연결 상태">
@@ -45,7 +45,9 @@
         <section class="panel">
             <div class="section-heading">
                 <div>
-                    <p class="section-kicker">GRAFANA · EU APP</p>
+                    <p class="section-kicker" th:text="|GRAFANA · ${observabilityServiceName}|">
+                        GRAFANA · SERVICE
+                    </p>
                     <h2>운영 알람과 Trace</h2>
                 </div>
             </div>
@@ -111,10 +113,10 @@
     </svg>
     <span>AI 상담</span>
 </button>
-<aside id="chat-drawer" class="chat-drawer" aria-hidden="true" aria-label="FMS Hotfix AI 상담">
+<aside id="chat-drawer" class="chat-drawer" aria-hidden="true" aria-label="Hotfix AI 상담">
     <header class="chat-header">
         <div>
-            <span class="eyebrow">FMS HOTFIX ASSISTANT</span>
+            <span class="eyebrow">HOTFIX ASSISTANT</span>
             <h2>무엇을 확인할까요?</h2>
         </div>
         <button id="chat-close" type="button" class="modal-close" aria-label="상담창 닫기">×</button>
@@ -130,6 +132,7 @@
         <form class="command-form" data-command-form hx-post="/ui/natural-language/interpretations"
               hx-target="#command-result" hx-indicator="#command-loading">
             <input type="hidden" name="idempotencyKey" th:value="${commandIdempotencyKey}">
+            <input type="hidden" name="conversationContext" value="">
             <label class="sr-only" for="command-text">작업 요청</label>
             <textarea id="command-text" name="text" maxlength="2000" required rows="3"
                       placeholder="예: 최근 실패한 빌드 원인을 분석해줘"></textarea>

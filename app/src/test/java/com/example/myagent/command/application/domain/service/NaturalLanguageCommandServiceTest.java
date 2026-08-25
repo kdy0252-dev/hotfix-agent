@@ -15,6 +15,7 @@ import com.example.myagent.command.application.port.out.CommandFailure;
 import com.example.myagent.command.application.port.out.CommandInterpretationStatePort;
 import com.example.myagent.command.application.port.out.CommandExecutionStatePort;
 import com.example.myagent.command.application.port.out.NaturalLanguageInterpreterPort;
+import com.example.myagent.command.application.domain.service.internal.NaturalLanguageInterpretationExecutor;
 import io.vavr.control.Either;
 import java.time.Clock;
 import java.time.Instant;
@@ -26,6 +27,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.task.SyncTaskExecutor;
 
 class NaturalLanguageCommandServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-20T01:00:00Z");
@@ -37,7 +39,6 @@ class NaturalLanguageCommandServiceTest {
         var dispatchedCommand = new AtomicReference<InterpretedCommand>();
         var dispatchCalls = new AtomicInteger();
         var service = new NaturalLanguageCommandService(
-            new StubInterpreter(readyJenkinsDraft()),
             interpretationState,
             (command, idempotencyKey) -> {
                 dispatchedCommand.set(command);
@@ -47,12 +48,18 @@ class NaturalLanguageCommandServiceTest {
                 ));
             },
             executionState,
-            Clock.fixed(NOW, ZoneOffset.UTC)
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            new NaturalLanguageInterpretationExecutor(
+                new StubInterpreter(readyJenkinsDraft()),
+                interpretationState,
+                new SyncTaskExecutor()
+            )
         );
-        var interpretation = service.interpret(new InterpretCommand(
+        var requested = service.interpret(new InterpretCommand(
             "PR 1285의 빌드 181을 분석해줘",
             "interpret-key"
         ));
+        var interpretation = service.get(requested.metadata().interpretationId());
         var command = new ExecutionCommand(
             interpretation.metadata().interpretationId(),
             interpretation.metadata().version(),
@@ -73,10 +80,11 @@ class NaturalLanguageCommandServiceTest {
         var interpreter = new StubInterpreter(readyJenkinsDraft());
         var service = service(interpreter, new InMemoryStatePort(), NOW);
 
-        var result = service.interpret(new InterpretCommand(
+        var requested = service.interpret(new InterpretCommand(
             "PR 1285의 FMS-EU/main 빌드 181 분석해. token=very-secret",
             "request-1"
         ));
+        var result = service.get(requested.metadata().interpretationId());
 
         assertThat(result.decision().status()).isEqualTo(InterpretationStatus.READY_FOR_CONFIRMATION);
         assertThat(result.decision().commandHash()).hasSize(64);
@@ -118,7 +126,11 @@ class NaturalLanguageCommandServiceTest {
         );
         var service = service(new StubInterpreter(draft), new InMemoryStatePort(), NOW);
 
-        var result = service.interpret(new InterpretCommand("analysis-1 후보를 선택해줘", "request-3"));
+        var requested = service.interpret(new InterpretCommand(
+            "analysis-1 후보를 선택해줘",
+            "request-3"
+        ));
+        var result = service.get(requested.metadata().interpretationId());
 
         assertThat(result.decision().status()).isEqualTo(InterpretationStatus.NEEDS_CLARIFICATION);
         assertThat(result.decision().feedback().missingFields())
@@ -149,7 +161,8 @@ class NaturalLanguageCommandServiceTest {
     void reportsReadyInterpretationAsExpiredAfterTenMinutes() {
         var statePort = new InMemoryStatePort();
         var initialService = service(new StubInterpreter(readyJenkinsDraft()), statePort, NOW);
-        var created = initialService.interpret(new InterpretCommand("빌드 분석", "request-5"));
+        var requested = initialService.interpret(new InterpretCommand("빌드 분석", "request-5"));
+        var created = initialService.get(requested.metadata().interpretationId());
         var laterService = service(
             new StubInterpreter(readyJenkinsDraft()),
             statePort,
@@ -168,13 +181,17 @@ class NaturalLanguageCommandServiceTest {
         Instant now
     ) {
         return new NaturalLanguageCommandService(
-            interpreterPort,
             statePort,
             (command, idempotencyKey) -> Either.right(new CommandExecution.Result(
                 "resource-1", "ACCEPTED", "/resource-1", List.of()
             )),
             new InMemoryExecutionStatePort(),
-            Clock.fixed(now, ZoneOffset.UTC)
+            Clock.fixed(now, ZoneOffset.UTC),
+            new NaturalLanguageInterpretationExecutor(
+                interpreterPort,
+                statePort,
+                new SyncTaskExecutor()
+            )
         );
     }
 
@@ -253,9 +270,19 @@ class NaturalLanguageCommandServiceTest {
                 )
             );
             entriesById.put(interpretationId, new StateEntry(
-                entry.idempotencyKey(), entry.requestBodyHash(), executed
+                entry.idempotencyKey(), entry.request(), executed
             ));
             return Either.right(executed);
+        }
+
+        @Override
+        public Either<CommandFailure, List<StateEntry>> findIncomplete() {
+            return Either.right(entriesById.values().stream()
+                .filter(entry -> entry.interpretation().decision().status()
+                    == InterpretationStatus.INTERPRETATION_REQUESTED
+                    || entry.interpretation().decision().status()
+                    == InterpretationStatus.INTERPRETING)
+                .toList());
         }
     }
 

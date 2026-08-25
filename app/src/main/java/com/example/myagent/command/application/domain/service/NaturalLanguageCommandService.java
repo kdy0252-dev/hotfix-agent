@@ -9,7 +9,7 @@ import com.example.myagent.command.application.domain.model.interpretation.Comma
 import com.example.myagent.command.application.domain.model.interpretation.CommandInterpretation.RequestFingerprint;
 import com.example.myagent.command.application.domain.model.interpretation.CommandInterpretation.Timing;
 import com.example.myagent.command.application.domain.model.interpretation.InterpretationStatus;
-import com.example.myagent.command.application.domain.service.support.CommandDraftValidator;
+import com.example.myagent.command.application.domain.service.internal.NaturalLanguageInterpretationExecutor;
 import com.example.myagent.command.application.domain.service.support.CommandHash;
 import com.example.myagent.command.application.domain.service.support.NaturalLanguagePolicyGuard;
 import com.example.myagent.command.application.domain.service.support.SensitiveTextRedactor;
@@ -18,12 +18,13 @@ import com.example.myagent.command.application.port.in.CommandUseCaseException;
 import com.example.myagent.command.application.port.in.ExecuteNaturalLanguageCommandUseCase;
 import com.example.myagent.command.application.port.in.GetCommandInterpretationUseCase;
 import com.example.myagent.command.application.port.in.InterpretNaturalLanguageCommandUseCase;
+import com.example.myagent.command.application.port.in.RecoverNaturalLanguageInterpretationUseCase;
 import com.example.myagent.command.application.port.out.CommandExecutionStatePort;
 import com.example.myagent.command.application.port.out.CommandFailure;
 import com.example.myagent.command.application.port.out.CommandInterpretationStatePort;
+import com.example.myagent.command.application.port.out.CommandInterpretationStatePort.RequestPayload;
 import com.example.myagent.command.application.port.out.CommandInterpretationStatePort.StateEntry;
 import com.example.myagent.command.application.port.out.ConfirmedCommandDispatchPort;
-import com.example.myagent.command.application.port.out.NaturalLanguageInterpreterPort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -35,27 +36,28 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class NaturalLanguageCommandService implements InterpretNaturalLanguageCommandUseCase,
-    GetCommandInterpretationUseCase, ExecuteNaturalLanguageCommandUseCase {
+    GetCommandInterpretationUseCase, ExecuteNaturalLanguageCommandUseCase,
+    RecoverNaturalLanguageInterpretationUseCase {
     private static final Duration INTERPRETATION_TTL = Duration.ofMinutes(10);
 
-    private final NaturalLanguageInterpreterPort interpreterPort;
     private final CommandInterpretationStatePort statePort;
     private final ConfirmedCommandDispatchPort dispatchPort;
     private final CommandExecutionStatePort executionStatePort;
     private final Clock clock;
+    private final NaturalLanguageInterpretationExecutor interpretationExecutor;
 
     public NaturalLanguageCommandService(
-        NaturalLanguageInterpreterPort interpreterPort,
         CommandInterpretationStatePort statePort,
         ConfirmedCommandDispatchPort dispatchPort,
         CommandExecutionStatePort executionStatePort,
-        Clock clock
+        Clock clock,
+        NaturalLanguageInterpretationExecutor interpretationExecutor
     ) {
-        this.interpreterPort = interpreterPort;
         this.statePort = statePort;
         this.dispatchPort = dispatchPort;
         this.executionStatePort = executionStatePort;
         this.clock = clock;
+        this.interpretationExecutor = interpretationExecutor;
     }
 
     @Override
@@ -76,11 +78,34 @@ public class NaturalLanguageCommandService implements InterpretNaturalLanguageCo
         var policyRejection = NaturalLanguagePolicyGuard.rejectionCode(redactedText);
         CommandInterpretation interpretation = policyRejection
             .map(code -> rejected(fingerprint, code, "허용된 자연어 작업 범위를 벗어났습니다."))
-            .orElseGet(() -> interpretWithAgent(redactedText, fingerprint));
+            .orElseGet(() -> create(
+                fingerprint,
+                new Decision(
+                    InterpretationStatus.INTERPRETATION_REQUESTED,
+                    null,
+                    Feedback.empty(),
+                    PolicyPreview.fixedPolicy(),
+                    null
+                )
+            ));
 
-        return statePort.save(new StateEntry(
-            command.idempotencyKey(), requestBodyHash, interpretation
-        )).getOrElseThrow(this::failure);
+        var entry = new StateEntry(
+            command.idempotencyKey(),
+            new RequestPayload(requestBodyHash, redactedText),
+            interpretation
+        );
+        CommandInterpretation saved = statePort.save(entry).getOrElseThrow(this::failure);
+        if (policyRejection.isEmpty()) {
+            interpretationExecutor.submit(entry);
+        }
+        return saved;
+    }
+
+    @Override
+    public int recoverInterruptedInterpretations() {
+        var entries = statePort.findIncomplete().getOrElseThrow(this::failure);
+        entries.forEach(interpretationExecutor::submit);
+        return entries.size();
     }
 
     @Override
@@ -182,40 +207,6 @@ public class NaturalLanguageCommandService implements InterpretNaturalLanguageCo
         );
     }
 
-    private CommandInterpretation interpretWithAgent(
-        String redactedText,
-        RequestFingerprint fingerprint
-    ) {
-        var draft = interpreterPort.interpret(redactedText).getOrElseThrow(this::failure);
-        var result = CommandDraftValidator.validate(draft);
-        if (result.isRejected()) {
-            return rejected(fingerprint, result.rejectionCode(), result.rejectionMessage());
-        }
-        if (!result.isReady()) {
-            return create(
-                fingerprint,
-                new Decision(
-                    InterpretationStatus.NEEDS_CLARIFICATION,
-                    null,
-                    new Feedback(result.missingFields(), result.questions(), null, null),
-                    PolicyPreview.fixedPolicy(),
-                    null
-                )
-            );
-        }
-        var policy = PolicyPreview.fixedPolicy();
-        return create(
-            fingerprint,
-            new Decision(
-                InterpretationStatus.READY_FOR_CONFIRMATION,
-                result.command(),
-                new Feedback(List.of(), List.of(), null, null),
-                policy,
-                CommandHash.calculate(result.command(), policy.policyVersion())
-            )
-        );
-    }
-
     private CommandInterpretation rejected(
         RequestFingerprint fingerprint,
         String rejectionCode,
@@ -262,7 +253,7 @@ public class NaturalLanguageCommandService implements InterpretNaturalLanguageCo
     }
 
     private CommandInterpretation replay(StateEntry previousEntry, String requestBodyHash) {
-        if (!previousEntry.requestBodyHash().equals(requestBodyHash)) {
+        if (!previousEntry.request().bodyHash().equals(requestBodyHash)) {
             throw new CommandUseCaseException(
                 "IDEMPOTENCY_KEY_REUSED", "같은 idempotency key에 다른 요청 본문을 사용할 수 없습니다."
             );
