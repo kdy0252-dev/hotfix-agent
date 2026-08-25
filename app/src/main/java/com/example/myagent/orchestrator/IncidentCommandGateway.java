@@ -42,8 +42,17 @@ public interface IncidentCommandGateway {
         String analysisId,
         long analysisVersion,
         String candidateId,
-        String idempotencyKey
+        String idempotencyKey,
+        String patchInstruction
     ) {
+        public SelectionCommand(
+            String analysisId,
+            long analysisVersion,
+            String candidateId,
+            String idempotencyKey
+        ) {
+            this(analysisId, analysisVersion, candidateId, idempotencyKey, "");
+        }
     }
 
     record ResourceResult(String resourceId, String status, String statusUrl, List<String> itemIds) {

@@ -2,6 +2,7 @@ package com.example.myagent.incident.application.domain.service.moduleapi;
 
 import com.example.myagent.incident.application.domain.model.analysis.AnalysisRequest;
 import com.example.myagent.incident.application.domain.model.analysis.SourceSpec;
+import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource;
 import com.example.myagent.incident.application.port.in.AnalyzeIncidentUseCase;
 import com.example.myagent.incident.application.port.in.AnalyzeIncidentUseCase.AnalysisCommand;
 import com.example.myagent.incident.application.port.in.QueryAnalysisUseCase;
@@ -76,7 +77,8 @@ public class IncidentCommandModuleApiService implements IncidentCommandGateway {
                 command.analysisId(),
                 command.candidateId(),
                 command.analysisVersion(),
-                command.idempotencyKey()
+                command.idempotencyKey(),
+                HotfixResource.PatchInstruction.from(command.patchInstruction())
             )
         );
         return hotfixResult(resource.identity().hotfixId(), resource.progress().status().name());

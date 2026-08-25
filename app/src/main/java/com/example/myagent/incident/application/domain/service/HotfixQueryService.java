@@ -82,7 +82,9 @@ public class HotfixQueryService implements QueryHotfixUseCase {
             snapshot.buildUrl(),
             snapshot.pipeline()
         );
-        return new HotfixResource(resource.identity(), progress, publication);
+        return new HotfixResource(
+            resource.identity(), resource.patchInstruction(), progress, publication
+        );
     }
 
     private IncidentUseCaseException failure(IncidentFailure incidentFailure) {

@@ -85,6 +85,7 @@ public class HotfixRecoveryExecutor {
         );
         HotfixResource recovering = new HotfixResource(
             current.identity(),
+            current.patchInstruction(),
             progress,
             current.publication()
         );
@@ -114,7 +115,7 @@ public class HotfixRecoveryExecutor {
             ? workflowPort.execute(
                 analysis,
                 candidate,
-                hotfixId,
+                current,
                 update -> saveProgress(envelope, update),
                 () -> executionRegistry.isCancelled(hotfixId)
             )
@@ -145,7 +146,9 @@ public class HotfixRecoveryExecutor {
         );
         executionRegistry.runIfActive(current.identity().hotfixId(), () -> save(
             envelope,
-            new HotfixResource(current.identity(), progress, current.publication())
+            new HotfixResource(
+                current.identity(), current.patchInstruction(), progress, current.publication()
+            )
         ));
     }
 
@@ -175,7 +178,9 @@ public class HotfixRecoveryExecutor {
             current.progress().changes(),
             current.progress().verification()
         );
-        return new HotfixResource(current.identity(), progress, current.publication());
+        return new HotfixResource(
+            current.identity(), current.patchInstruction(), progress, current.publication()
+        );
     }
 
     private HotfixResource save(HotfixEnvelope envelope, HotfixResource resource) {

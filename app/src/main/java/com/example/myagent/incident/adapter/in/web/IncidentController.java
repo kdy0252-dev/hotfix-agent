@@ -18,6 +18,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.jmolecules.architecture.hexagonal.Adapter;
@@ -118,7 +119,8 @@ public class IncidentController {
             analysisId,
             request.candidateId(),
             request.analysisVersion(),
-            idempotencyKey
+            idempotencyKey,
+            HotfixResource.PatchInstruction.from(request.patchInstruction())
         ));
         return ResponseEntity.accepted().body(new AcceptedResource(
             resource.identity().hotfixId(),
@@ -176,7 +178,8 @@ public class IncidentController {
 
     public record CandidateSelectionRequest(
         @NotBlank String candidateId,
-        @Positive long analysisVersion
+        @Positive long analysisVersion,
+        @Size(max = 2_000) String patchInstruction
     ) {
     }
 

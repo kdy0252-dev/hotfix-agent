@@ -170,15 +170,23 @@ class DashboardInteractionContractTest {
             "챗봇 요청을 분석 중입니다",
             "요청이 완료되었습니다. PR 분석 결과입니다",
             "Draft PR 생성을 진행할까요",
-            "data-chat-confirm-form"
+            "data-chat-confirm-form",
+            "name=\"patchInstruction\""
         );
         assertThat(script).contains(
             "isAffirmative",
+            "isPatchDirection",
+            "directedConfirmationForm",
             "confirmationForms.length === 1",
             "refreshWorkflowList",
             "showModal()"
         );
-        assertThat(styles).contains(".chat-launcher", ".chat-drawer.open", ".chat-message.user");
+        assertThat(styles).contains(
+            ".chat-launcher",
+            ".chat-drawer.open",
+            ".chat-message.user",
+            ".patch-direction-form"
+        );
     }
 
     @Test

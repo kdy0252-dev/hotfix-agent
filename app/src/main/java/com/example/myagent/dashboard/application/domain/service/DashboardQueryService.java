@@ -175,7 +175,8 @@ public class DashboardQueryService implements DashboardUseCase {
                 command.analysisId(),
                 command.analysisVersion(),
                 command.candidateId(),
-                command.idempotencyKey()
+                command.idempotencyKey(),
+                command.patchInstruction()
             )
         ).getOrElseThrow(this::failure);
     }

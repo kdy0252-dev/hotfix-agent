@@ -104,7 +104,8 @@ public class IncidentCommandModuleAdapter implements ConfirmedCommandDispatchPor
             parameters.analysisId(),
             parameters.analysisVersion(),
             parameters.candidateId(),
-            idempotencyKey
+            idempotencyKey,
+            ""
         ));
     }
 

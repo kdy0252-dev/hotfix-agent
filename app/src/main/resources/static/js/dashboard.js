@@ -241,6 +241,19 @@ document.addEventListener("DOMContentLoaded", () => {
         return /^(응+|네|예|ㅇㅇ|좋아|진행해|yes|ok)/i.test(compact);
     };
 
+    const isPatchDirection = (text) => {
+        return /(수정|고쳐|변경|반영|방향|방식)/.test(text)
+            && !/(분석|목록|리스트|최근|상태|우선순위)/.test(text);
+    };
+
+    const directedConfirmationForm = (forms, text) => {
+        const candidateMatch = text.match(/(\d+)\s*번/);
+        if (candidateMatch) {
+            return [...forms].find(form => form.dataset.candidateNumber === candidateMatch[1]);
+        }
+        return forms.length === 1 ? forms[0] : undefined;
+    };
+
     const showDuplicateConfirmation = (form, normalizedText) => {
         const result = document.querySelector("#command-result");
         if (!result) {
@@ -283,6 +296,25 @@ document.addEventListener("DOMContentLoaded", () => {
             const confirmationForms = document.querySelectorAll(
                 "#command-result [data-chat-confirm-form]"
             );
+            const directedForm = isPatchDirection(normalizedText)
+                ? directedConfirmationForm(confirmationForms, normalizedText) : undefined;
+            if (directedForm) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                appendUserMessage(normalizedText);
+                textarea.value = "";
+                const patchInstruction = directedForm.querySelector(
+                    "input[name='patchInstruction']"
+                );
+                if (patchInstruction) {
+                    patchInstruction.value = normalizedText;
+                }
+                directedForm.dataset.userMessageAdded = "true";
+                directedForm.requestSubmit(
+                    directedForm.querySelector("button[type='submit']")
+                );
+                return;
+            }
             if (isAffirmative(normalizedText) && confirmationForms.length === 1) {
                 event.preventDefault();
                 event.stopImmediatePropagation();

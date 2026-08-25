@@ -112,10 +112,15 @@ class HotfixSelectionServiceTest {
             "analysis-1",
             candidate.identity().candidateId(),
             1,
-            "selection-key"
+            "selection-key",
+            HotfixResource.PatchInstruction.from(
+                "중복 요청이면 기존 결과를 반환하도록 수정"
+            )
         ));
 
         assertThat(response.progress().status()).isEqualTo(HotfixResource.Status.SELECTED);
+        assertThat(response.patchInstruction().text())
+            .isEqualTo("중복 요청이면 기존 결과를 반환하도록 수정");
         assertThat(tasks.pending()).isEqualTo(1);
         verify(workflowPort, never()).execute(any(), any(), any(), any(), any());
 
@@ -127,6 +132,10 @@ class HotfixSelectionServiceTest {
         var envelope = ArgumentCaptor.forClass(IncidentStatePort.HotfixEnvelope.class);
         verify(statePort, times(2)).saveHotfix(envelope.capture());
         assertThat(envelope.getValue().resource()).isEqualTo(completed);
+        var workflowHotfix = ArgumentCaptor.forClass(HotfixResource.class);
+        verify(workflowPort).execute(any(), any(), workflowHotfix.capture(), any(), any());
+        assertThat(workflowHotfix.getValue().patchInstruction().text())
+            .isEqualTo("중복 요청이면 기존 결과를 반환하도록 수정");
     }
 
     @Test

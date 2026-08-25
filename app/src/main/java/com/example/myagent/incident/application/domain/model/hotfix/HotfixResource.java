@@ -2,7 +2,38 @@ package com.example.myagent.incident.application.domain.model.hotfix;
 
 import java.util.List;
 
-public record HotfixResource(Identity identity, Progress progress, Publication publication) {
+public record HotfixResource(
+    Identity identity,
+    PatchInstruction patchInstruction,
+    Progress progress,
+    Publication publication
+) {
+    public HotfixResource {
+        patchInstruction = patchInstruction == null ? PatchInstruction.none() : patchInstruction;
+    }
+
+    public HotfixResource(Identity identity, Progress progress, Publication publication) {
+        this(identity, PatchInstruction.none(), progress, publication);
+    }
+
+    public record PatchInstruction(String text) {
+        public PatchInstruction {
+            text = text == null ? "" : text.trim();
+        }
+
+        public static PatchInstruction from(String text) {
+            return new PatchInstruction(text);
+        }
+
+        public static PatchInstruction none() {
+            return new PatchInstruction("");
+        }
+
+        public boolean present() {
+            return !text.isBlank();
+        }
+    }
+
     public record Identity(String hotfixId, String analysisId, String candidateId) {
     }
 

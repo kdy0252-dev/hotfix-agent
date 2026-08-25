@@ -143,7 +143,8 @@ public class IncidentDashboardModuleApiService implements IncidentDashboardGatew
                 command.analysisId(),
                 command.candidateId(),
                 command.analysisVersion(),
-                command.idempotencyKey()
+                command.idempotencyKey(),
+                HotfixResource.PatchInstruction.from(command.patchInstruction())
             )
         );
         return resourceResult(resource);

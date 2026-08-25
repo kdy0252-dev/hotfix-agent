@@ -689,6 +689,7 @@ public class DashboardController {
         @RequestParam @Positive long analysisVersion,
         @RequestParam @NotBlank String candidateId,
         @RequestParam @NotBlank String idempotencyKey,
+        @RequestParam(defaultValue = "") @Size(max = 2_000) String patchInstruction,
         @RequestParam(defaultValue = "false") boolean cardOnly,
         @RequestParam(defaultValue = "false") boolean chatMode,
         Model model
@@ -698,7 +699,8 @@ public class DashboardController {
                 analysisId,
                 analysisVersion,
                 candidateId,
-                idempotencyKey
+                idempotencyKey,
+                patchInstruction
             )
         ));
         if (cardOnly) {

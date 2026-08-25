@@ -80,6 +80,7 @@ class IncidentStateEntityMappingTest {
         );
         var resource = new HotfixResource(
             new HotfixResource.Identity("hotfix-1", "analysis-1", "candidate-1"),
+            HotfixResource.PatchInstruction.from("기존 예약을 먼저 조회하도록 수정"),
             new HotfixResource.Progress(
                 new HotfixResource.WorkflowState(
                     HotfixResource.Status.VERIFYING,

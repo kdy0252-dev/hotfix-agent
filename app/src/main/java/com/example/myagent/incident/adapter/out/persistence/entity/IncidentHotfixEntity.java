@@ -34,6 +34,8 @@ public class IncidentHotfixEntity {
     private String idempotencyKey;
     @Column(name = "request_hash", nullable = false)
     private String requestHash;
+    @Column(name = "patch_instruction", columnDefinition = "TEXT")
+    private String patchInstruction;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private HotfixResource.Status status;
@@ -111,6 +113,8 @@ public class IncidentHotfixEntity {
         entity.schemaVersion = envelope.schemaVersion();
         entity.idempotencyKey = envelope.idempotencyKey();
         entity.requestHash = envelope.requestHash();
+        entity.patchInstruction = resource.patchInstruction().present()
+            ? resource.patchInstruction().text() : null;
         entity.status = progress.status();
         entity.branchName = progress.branchName();
         entity.changedFiles = progress.changedFiles();
@@ -174,6 +178,7 @@ public class IncidentHotfixEntity {
         );
         var resource = new HotfixResource(
             new HotfixResource.Identity(hotfixId, analysisId, candidateId),
+            HotfixResource.PatchInstruction.from(patchInstruction),
             progress,
             publication
         );

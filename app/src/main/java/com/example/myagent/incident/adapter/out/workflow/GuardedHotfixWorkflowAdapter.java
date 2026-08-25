@@ -62,25 +62,29 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
     public Either<IncidentFailure, HotfixResource> execute(
         AnalysisSession analysis,
         BugCandidate candidate,
-        String hotfixId,
+        HotfixResource hotfix,
         Consumer<ProgressUpdate> progressReporter,
         BooleanSupplier cancelled
     ) {
+        String hotfixId = hotfix.identity().hotfixId();
         if (cancelled.getAsBoolean()) {
             return Either.left(cancellationFailure());
         }
         if (runtimeProperties.mode() != AgentRuntimeProperties.Mode.DRAFT_PR) {
-            return Either.right(needsReview(
-                analysis,
-                candidate,
-                hotfixId,
-                null,
-                null,
-                failure(
-                    WorkflowStage.PATCH_GENERATION,
-                    "REPORT_ONLY_MODE",
-                    "AGENT_MODE가 DRAFT_PR이 아니므로 코드 변경을 실행하지 않았습니다."
-                )
+            return Either.right(withPatchInstruction(
+                needsReview(
+                    analysis,
+                    candidate,
+                    hotfixId,
+                    null,
+                    null,
+                    failure(
+                        WorkflowStage.PATCH_GENERATION,
+                        "REPORT_ONLY_MODE",
+                        "AGENT_MODE가 DRAFT_PR이 아니므로 코드 변경을 실행하지 않았습니다."
+                    )
+                ),
+                hotfix.patchInstruction()
             ));
         }
         progressReporter.accept(new ProgressUpdate(
@@ -91,10 +95,10 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
         ));
         var prepared = patchWorkspace.prepare(analysis, candidate, hotfixId);
         if (prepared.isLeft()) {
-            return Either.right(needsReview(
+            return Either.right(withPatchInstruction(needsReview(
                 analysis, candidate, hotfixId, null, null,
                 failure(WorkflowStage.WORKSPACE_PREPARATION, prepared.getLeft())
-            ));
+            ), hotfix.patchInstruction()));
         }
         progressReporter.accept(new ProgressUpdate(
             HotfixResource.Status.PATCHING,
@@ -107,9 +111,10 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
             candidate,
             hotfixId,
             prepared.get(),
+            hotfix.patchInstruction(),
             progressReporter,
             cancelled
-        );
+        ).map(resource -> withPatchInstruction(resource, hotfix.patchInstruction()));
     }
 
     @Override
@@ -140,7 +145,9 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
             hotfix.publication().ciBuildUrl(),
             hotfix.publication().ciResult()
         );
-        return Either.right(new HotfixResource(hotfix.identity(), hotfix.progress(), publication));
+        return Either.right(new HotfixResource(
+            hotfix.identity(), hotfix.patchInstruction(), hotfix.progress(), publication
+        ));
     }
 
     @Override
@@ -178,7 +185,7 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
         if (focused.isLeft() || !passed(focused.get())) {
             String reason = focused.isLeft()
                 ? focused.getLeft().message() : "사람 수정 commit의 집중 검증이 실패했습니다.";
-            return Either.right(needsReview(
+            return Either.right(withPatchInstruction(needsReview(
                 analysis,
                 candidate,
                 hotfix.identity().hotfixId(),
@@ -186,7 +193,7 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
                 focused.getOrElse(Verification.empty()),
                 failure(WorkflowStage.FOCUSED_VERIFICATION, "HUMAN_PATCH_VERIFICATION_FAILED", reason),
                 hotfix.publication()
-            ));
+            ), hotfix.patchInstruction()));
         }
         progressReporter.accept(new ProgressUpdate(
             HotfixResource.Status.VERIFYING,
@@ -197,7 +204,7 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
         var review = patchReview.review(candidate, patch);
         if (review.isLeft() || !review.get().approved()) {
             String reason = review.isLeft() ? review.getLeft().message() : review.get().summary();
-            return Either.right(needsReview(
+            return Either.right(withPatchInstruction(needsReview(
                 analysis,
                 candidate,
                 hotfix.identity().hotfixId(),
@@ -205,7 +212,7 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
                 focused.get(),
                 failure(WorkflowStage.CODE_REVIEW, "HUMAN_PATCH_REVIEW_REJECTED", reason),
                 hotfix.publication()
-            ));
+            ), hotfix.patchInstruction()));
         }
         return verifyAndPublish(
             analysis,
@@ -217,7 +224,7 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
             cancelled,
             hotfix.publication().reviewBranchUrl(),
             progressReporter
-        );
+        ).map(resource -> withPatchInstruction(resource, hotfix.patchInstruction()));
     }
 
     private Either<IncidentFailure, HotfixResource> executePrepared(
@@ -225,11 +232,12 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
         BugCandidate candidate,
         String hotfixId,
         Workspace workspace,
+        HotfixResource.PatchInstruction patchInstruction,
         Consumer<ProgressUpdate> progressReporter,
         BooleanSupplier cancelled
     ) {
         var patchResult = createVerifiedPatch(
-            candidate, workspace, progressReporter, cancelled
+            candidate, workspace, patchInstruction, progressReporter, cancelled
         );
         if (patchResult.isLeft()) {
             return Either.right(needsReview(
@@ -283,6 +291,7 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
     private Either<IncidentFailure, VerifiedPatch> createVerifiedPatch(
         BugCandidate candidate,
         Workspace initialWorkspace,
+        HotfixResource.PatchInstruction patchInstruction,
         Consumer<ProgressUpdate> progressReporter,
         BooleanSupplier cancelled
     ) {
@@ -294,7 +303,7 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
                 return Either.left(cancellationFailure());
             }
             var proposal = patchProposal.propose(new PatchProposalPort.PatchRequest(
-                candidate, workspace, attempt, previousFailure
+                candidate, workspace, attempt, previousFailure, patchInstruction
             ));
             if (proposal.isLeft()) {
                 return Either.left(proposal.getLeft());
@@ -511,7 +520,18 @@ public class GuardedHotfixWorkflowAdapter implements HotfixWorkflowPort {
             hotfix.progress().changes(),
             verificationResult
         );
-        return new HotfixResource(hotfix.identity(), progress, hotfix.publication());
+        return new HotfixResource(
+            hotfix.identity(), hotfix.patchInstruction(), progress, hotfix.publication()
+        );
+    }
+
+    private HotfixResource withPatchInstruction(
+        HotfixResource resource,
+        HotfixResource.PatchInstruction patchInstruction
+    ) {
+        return new HotfixResource(
+            resource.identity(), patchInstruction, resource.progress(), resource.publication()
+        );
     }
 
     private FailureDetail failure(WorkflowStage stage, IncidentFailure failure) {

@@ -32,7 +32,8 @@
                 </dl>
             </details>
             <form th:if="${work.candidate.selectable and work.hotfix == null}"
-                  th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${workflow.storedAnalysis.analysis.identity.analysisId})}"
+                  th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${workflow.storedAnalysis.analysis.identity.analysisId})},
+                           data-candidate-number=${selectedCandidate != null ? requestedCandidateNumber : candidateStat.count}"
                   hx-target="#command-result" hx-swap="innerHTML" data-chat-confirm-form>
                 <input type="hidden" name="analysisVersion"
                        th:value="${workflow.storedAnalysis.analysis.identity.version}">
@@ -40,6 +41,7 @@
                 <input type="hidden" name="idempotencyKey"
                        th:value="|${selectionIdempotencyKey}-${work.candidate.candidateId}|">
                 <input type="hidden" name="chatMode" value="true">
+                <input type="hidden" name="patchInstruction" value="">
                 <button type="submit" class="small-action">이 원인으로 진행</button>
             </form>
             <small th:if="${work.hotfix != null}" class="chat-hint"

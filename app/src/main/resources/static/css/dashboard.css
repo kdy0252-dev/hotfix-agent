@@ -1404,9 +1404,44 @@ progress::-webkit-progress-value {
     margin-top: 10px;
 }
 
-.candidate-workflow > form {
+.candidate-workflow > form:not(.patch-direction-form) {
     display: flex;
     justify-content: flex-end;
+}
+
+.patch-direction-form {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+    margin-top: 14px;
+}
+
+.patch-direction-form label {
+    display: grid;
+    gap: 6px;
+}
+
+.patch-direction-form label > span {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.patch-direction-form label small {
+    font-weight: 500;
+}
+
+.patch-direction-form textarea {
+    min-height: 44px;
+    max-height: 110px;
+    resize: vertical;
+}
+
+@media (max-width: 760px) {
+    .patch-direction-form {
+        grid-template-columns: 1fr;
+    }
 }
 
 .workflow-card-actions {

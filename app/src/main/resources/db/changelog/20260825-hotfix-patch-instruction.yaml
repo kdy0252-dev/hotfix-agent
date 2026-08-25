@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260825-02-hotfix-patch-instruction
+      author: dykim
+      changes:
+        - sqlFile:
+            path: db/changelog/sql/20260825-hotfix-patch-instruction.sql
+            splitStatements: true
+            stripComments: true

@@ -94,8 +94,17 @@ public interface DashboardUseCase {
         String analysisId,
         long analysisVersion,
         String candidateId,
-        String idempotencyKey
+        String idempotencyKey,
+        String patchInstruction
     ) {
+        public SelectionCommand(
+            String analysisId,
+            long analysisVersion,
+            String candidateId,
+            String idempotencyKey
+        ) {
+            this(analysisId, analysisVersion, candidateId, idempotencyKey, "");
+        }
     }
 
     record RefinementCommand(String analysisId, long analysisVersion, String candidateId) {

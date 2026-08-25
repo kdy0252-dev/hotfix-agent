@@ -7,6 +7,7 @@ import com.example.myagent.global.configuration.AiInputBudgetProperties;
 import com.example.myagent.global.configuration.AiInputBudgetProperties.RoleBudget;
 import com.example.myagent.global.support.LlmPromptBudget;
 import com.example.myagent.incident.application.domain.model.analysis.BugCandidate;
+import com.example.myagent.incident.application.domain.model.hotfix.HotfixResource;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.FileUpdate;
 import com.example.myagent.incident.application.domain.model.hotfix.PatchArtifacts.Workspace;
 import java.util.List;
@@ -30,7 +31,13 @@ class PatchAuthorAgentAiMockTest {
         context.expectResponse(expected);
 
         var result = new PatchAuthorAgent(promptBudget()).propose(
-            new PatchAuthorInput(eligibleCandidate(), workspace(), 1, "none"),
+            new PatchAuthorInput(
+                eligibleCandidate(),
+                workspace(),
+                1,
+                "none",
+                HotfixResource.PatchInstruction.none()
+            ),
             context
         );
 

@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class GuardedHotfixWorkflowAdapterTest {
     private static final String HOTFIX_ID = "12345678-1234-1234-1234-123456789012";
@@ -94,7 +95,7 @@ class GuardedHotfixWorkflowAdapterTest {
         HotfixResource result = workflow.execute(
             analysis(),
             candidate(),
-            HOTFIX_ID,
+            selectedHotfix("중복 요청이면 기존 결과를 반환하도록 수정"),
             progressUpdates::add,
             () -> false
         ).get();
@@ -114,6 +115,10 @@ class GuardedHotfixWorkflowAdapterTest {
                 HotfixResource.WorkflowStage.DRAFT_PR_PUBLICATION
             );
         verify(pullRequestPort).publishDraft(any());
+        var patchRequest = ArgumentCaptor.forClass(PatchProposalPort.PatchRequest.class);
+        verify(proposalPort).propose(patchRequest.capture());
+        assertThat(patchRequest.getValue().patchInstruction().text())
+            .isEqualTo("중복 요청이면 기존 결과를 반환하도록 수정");
     }
 
     @Test
@@ -130,7 +135,7 @@ class GuardedHotfixWorkflowAdapterTest {
         HotfixResource result = workflow.execute(
             analysis(),
             candidate(),
-            HOTFIX_ID,
+            selectedHotfix(),
             progressUpdate -> { },
             () -> false
         ).get();
@@ -152,7 +157,7 @@ class GuardedHotfixWorkflowAdapterTest {
         when(workspacePort.refresh(any())).thenReturn(Either.right(workspace));
 
         HotfixResource result = workflow.execute(
-            analysis(), candidate(), HOTFIX_ID, progressUpdate -> { }, () -> false
+            analysis(), candidate(), selectedHotfix(), progressUpdate -> { }, () -> false
         ).get();
 
         assertThat(result.progress().failure().stage())
@@ -168,7 +173,7 @@ class GuardedHotfixWorkflowAdapterTest {
         var result = workflow.execute(
             analysis(),
             candidate(),
-            HOTFIX_ID,
+            selectedHotfix(),
             progressUpdate -> { },
             () -> true
         );
@@ -340,6 +345,28 @@ class GuardedHotfixWorkflowAdapterTest {
                 Verification.empty()
             ),
             HotfixResource.Publication.forHumanReview(reviewBranchUrl)
+        );
+    }
+
+    private HotfixResource selectedHotfix() {
+        return selectedHotfix("");
+    }
+
+    private HotfixResource selectedHotfix(String patchInstruction) {
+        return new HotfixResource(
+            new HotfixResource.Identity(HOTFIX_ID, "analysis-1", "candidate-1"),
+            HotfixResource.PatchInstruction.from(patchInstruction),
+            new HotfixResource.Progress(
+                new HotfixResource.WorkflowState(
+                    HotfixResource.Status.SELECTED,
+                    null,
+                    null,
+                    null
+                ),
+                HotfixResource.ChangeMetrics.empty(),
+                Verification.empty()
+            ),
+            HotfixResource.Publication.empty()
         );
     }
 }

@@ -357,6 +357,7 @@
             </ol>
 
             <form th:if="${hotfix == null and work.candidate.selectable}"
+                  class="patch-direction-form"
                   th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${item.storedAnalysis.analysis.identity.analysisId})}"
                   hx-target="closest .workflow-card" hx-indicator="this" hx-swap="outerHTML">
                 <input type="hidden" name="analysisVersion" th:value="${item.storedAnalysis.analysis.identity.version}">
@@ -364,6 +365,11 @@
                 <input type="hidden" name="idempotencyKey"
                        th:value="|dashboard-selection-${item.storedAnalysis.analysis.identity.analysisId}-${work.candidate.candidateId}|">
                 <input type="hidden" name="cardOnly" value="true">
+                <label>
+                    <span>수정 방향 <small>선택 사항</small></span>
+                    <textarea name="patchInstruction" maxlength="2000" rows="2"
+                              placeholder="예: 중복 요청을 먼저 조회하고 기존 결과를 반환하도록 수정"></textarea>
+                </label>
                 <button type="submit" class="primary">이 원인만 Draft PR로 수정</button>
             </form>
             <div th:if="${hotfix == null and !work.candidate.selectable}" class="selection-restriction">

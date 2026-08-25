@@ -36,7 +36,8 @@
                 </dl>
             </details>
             <form th:if="${candidate.selectable}"
-                  th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${analysis.identity.analysisId})}"
+                  th:attr="hx-post=@{/ui/analyses/{id}/selections(id=${analysis.identity.analysisId})},
+                           data-candidate-number=${candidateStat.count}"
                   hx-target="#command-result" hx-swap="innerHTML"
                   data-chat-confirm-form>
                 <input type="hidden" name="analysisVersion" th:value="${analysis.identity.version}">
@@ -44,6 +45,7 @@
                 <input type="hidden" name="idempotencyKey"
                        th:value="|${selectionIdempotencyKey}-${candidate.candidateId}|">
                 <input type="hidden" name="chatMode" value="true">
+                <input type="hidden" name="patchInstruction" value="">
                 <button type="submit" class="small-action"
                         th:text="|${candidateStat.count}번 원인으로 진행|">이 원인으로 진행</button>
             </form>

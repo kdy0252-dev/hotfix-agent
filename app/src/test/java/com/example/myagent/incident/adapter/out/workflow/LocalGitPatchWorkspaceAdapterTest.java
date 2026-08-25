@@ -122,6 +122,26 @@ class LocalGitPatchWorkspaceAdapterTest {
     }
 
     @Test
+    void keepsARelativeEvidencePathWhenThePackageAlsoContainsEu() throws Exception {
+        String relativePath =
+            "eu/eu-app/src/test/java/io/autocrypt/fms/eu/IntentionalCompileFailureTest.java";
+        Files.createDirectories(repository.resolve(relativePath).getParent());
+        Files.writeString(repository.resolve(relativePath), "class IntentionalCompileFailureTest {}\n");
+        command(repository, "git", "add", "--", relativePath);
+        command(
+            repository,
+            "git", "-c", "user.name=Test", "-c", "user.email=test@localhost",
+            "commit", "-m", "add relative evidence path"
+        );
+        baseCommit = command(repository, "git", "rev-parse", "HEAD").trim();
+        var candidate = candidate(relativePath + ":5");
+
+        var workspace = adapter.prepare(analysis(candidate), candidate, hotfixId()).get();
+
+        assertThat(workspace.sourceFiles()).containsOnlyKeys(relativePath);
+    }
+
+    @Test
     void fetchesAMissingCommitWithTokenRemoteInsteadOfSshOrigin() throws Exception {
         command(repository, "git", "push", remoteRepository.toString(), "main");
         command(repository, "git", "remote", "add", "origin", "git@bitbucket.invalid:fms.git");

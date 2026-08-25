@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/20260824-analysis-recovery-request.yaml
   - include:
       file: db/changelog/20260825-durable-ai-requests.yaml
+  - include:
+      file: db/changelog/20260825-hotfix-patch-instruction.yaml

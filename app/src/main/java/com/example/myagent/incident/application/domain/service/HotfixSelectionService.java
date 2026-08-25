@@ -68,7 +68,12 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
         validateCandidate(candidate);
         validateSourceFreshness(analysis);
         String hotfixId = UUID.randomUUID().toString();
-        HotfixResource selected = selected(analysis, candidate, hotfixId);
+        HotfixResource selected = selected(
+            analysis,
+            candidate,
+            hotfixId,
+            command.patchInstruction()
+        );
         HotfixEnvelope envelope = new HotfixEnvelope(
             SCHEMA_VERSION,
             command.idempotencyKey(),
@@ -115,7 +120,7 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
         HotfixResource completed = Try.of(() -> workflowPort.execute(
             analysis,
             candidate,
-            hotfixId,
+            envelope.resource(),
             update -> saveProgress(envelope, update),
             () -> executionRegistry.isCancelled(hotfixId)
         ).fold(
@@ -157,14 +162,18 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
                 envelope.schemaVersion(),
                 envelope.idempotencyKey(),
                 envelope.requestHash(),
-                new HotfixResource(resource.identity(), progress, resource.publication())
+                new HotfixResource(
+                    resource.identity(), resource.patchInstruction(), progress,
+                    resource.publication()
+                )
             )).getOrElseThrow(this::failure));
     }
 
     private HotfixResource selected(
         AnalysisSession analysis,
         BugCandidate candidate,
-        String hotfixId
+        String hotfixId,
+        HotfixResource.PatchInstruction patchInstruction
     ) {
         return new HotfixResource(
             new HotfixResource.Identity(
@@ -172,6 +181,7 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
                 analysis.identity().analysisId(),
                 candidate.identity().candidateId()
             ),
+            patchInstruction,
             new HotfixResource.Progress(
                 new HotfixResource.WorkflowState(
                     HotfixResource.Status.SELECTED,
@@ -204,7 +214,9 @@ public class HotfixSelectionService implements SelectCandidateUseCase {
             resource.progress().changes(),
             resource.progress().verification()
         );
-        return new HotfixResource(resource.identity(), progress, resource.publication());
+        return new HotfixResource(
+            resource.identity(), resource.patchInstruction(), progress, resource.publication()
+        );
     }
 
     private AnalysisSession analysis(String analysisId) {

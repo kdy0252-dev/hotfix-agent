@@ -138,7 +138,8 @@ public class IncidentDashboardModuleAdapter implements IncidentDashboardPort {
                     command.analysisId(),
                     command.analysisVersion(),
                     command.candidateId(),
-                    command.idempotencyKey()
+                    command.idempotencyKey(),
+                    command.patchInstruction()
                 )
             );
             return new DashboardView.ResourceResult(

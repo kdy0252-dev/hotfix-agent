@@ -30,7 +30,8 @@ public class EmbabelPatchProposalAdapter implements PatchProposalPort {
                 request.candidate(),
                 request.workspace(),
                 request.attempt(),
-                request.previousFailure()
+                request.previousFailure(),
+                request.patchInstruction()
             )).resultOfType(PatchProposalResult.class);
             return new Proposal(result.summary(), result.updates());
         }).toEither().mapLeft(exception -> new IncidentFailure(

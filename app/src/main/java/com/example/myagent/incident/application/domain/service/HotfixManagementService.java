@@ -74,7 +74,9 @@ public class HotfixManagementService implements ManageHotfixUseCase {
         );
         HotfixResource verifying = save(
             context.envelope(),
-            new HotfixResource(current.identity(), progress, current.publication())
+            new HotfixResource(
+                current.identity(), current.patchInstruction(), progress, current.publication()
+            )
         );
         HotfixEnvelope verifyingEnvelope = replace(context.envelope(), verifying);
         executionRegistry.submit(
@@ -96,7 +98,8 @@ public class HotfixManagementService implements ManageHotfixUseCase {
             analysis.identity().analysisId(),
             previous.identity().candidateId(),
             analysis.identity().version(),
-            command.idempotencyKey()
+            command.idempotencyKey(),
+            previous.patchInstruction()
         ));
     }
 
@@ -185,7 +188,9 @@ public class HotfixManagementService implements ManageHotfixUseCase {
         );
         executionRegistry.runIfActive(current.identity().hotfixId(), () -> save(
             envelope,
-            new HotfixResource(current.identity(), progress, current.publication())
+            new HotfixResource(
+                current.identity(), current.patchInstruction(), progress, current.publication()
+            )
         ));
     }
 
@@ -205,7 +210,9 @@ public class HotfixManagementService implements ManageHotfixUseCase {
             current.progress().changes(),
             current.progress().verification()
         );
-        return new HotfixResource(current.identity(), progress, current.publication());
+        return new HotfixResource(
+            current.identity(), current.patchInstruction(), progress, current.publication()
+        );
     }
 
     private HotfixResource save(HotfixEnvelope envelope, HotfixResource resource) {

@@ -541,12 +541,16 @@ class DashboardControllerTest {
         mockMvc.perform(post("/ui/analyses/analysis-1/selections")
                 .param("analysisVersion", "1")
                 .param("candidateId", "candidate-1")
+                .param("patchInstruction", "중복 요청이면 기존 결과를 반환하도록 수정")
                 .param("idempotencyKey", "selection-key"))
             .andExpect(status().isOk())
             .andExpect(view().name("dashboard/fragments/selection"))
             .andExpect(model().attribute("resource", resource));
 
-        verify(dashboardUseCase).selectCandidate(any());
+        var command = ArgumentCaptor.forClass(DashboardUseCase.SelectionCommand.class);
+        verify(dashboardUseCase).selectCandidate(command.capture());
+        assertThat(command.getValue().patchInstruction())
+            .isEqualTo("중복 요청이면 기존 결과를 반환하도록 수정");
     }
 
     @Test
@@ -568,6 +572,10 @@ class DashboardControllerTest {
             .andExpect(status().isOk())
             .andExpect(view().name("dashboard/fragments/workflows :: card"))
             .andExpect(model().attribute("workflows", List.of(workflow)));
+
+        var command = ArgumentCaptor.forClass(DashboardUseCase.SelectionCommand.class);
+        verify(dashboardUseCase).selectCandidate(command.capture());
+        assertThat(command.getValue().patchInstruction()).isEmpty();
     }
 
     private DashboardView.FailedPullRequest failedPullRequest() {

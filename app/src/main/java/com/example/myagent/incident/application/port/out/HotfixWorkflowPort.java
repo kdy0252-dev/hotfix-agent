@@ -11,7 +11,7 @@ public interface HotfixWorkflowPort {
     Either<IncidentFailure, HotfixResource> execute(
         AnalysisSession analysis,
         BugCandidate candidate,
-        String hotfixId,
+        HotfixResource hotfix,
         Consumer<ProgressUpdate> progressReporter,
         BooleanSupplier cancelled
     );
